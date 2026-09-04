@@ -31,8 +31,8 @@ public:
     ImTextureID GetFolderIcon(bool is_open);
     ImTextureID GetIconByName(const std::string& name);
 
-    /// Load or retrieve cached texture for an SVG file path
-    ImTextureID GetTexture(const std::string& svg_path);
+    /// Load or retrieve cached texture for an SVG file path. If fallback_to_default is false, returns 0 if missing.
+    ImTextureID GetTexture(const std::string& svg_path, bool fallback_to_default = true);
 
 private:
     IconManager() = default;

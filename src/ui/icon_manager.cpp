@@ -72,11 +72,12 @@ void IconManager::Init(const std::string& icons_directory) {
     ext_to_svg_[".cmake"] = "file_type_cmake.svg";
 }
 
-ImTextureID IconManager::GetTexture(const std::string& svg_filename) {
+ImTextureID IconManager::GetTexture(const std::string& svg_filename, bool fallback_to_default) {
     if (icons_dir_.empty()) return 0;
 
     std::string full_path = icons_dir_ + "/" + svg_filename;
     if (!fs::exists(full_path)) {
+        if (!fallback_to_default) return 0;
         full_path = icons_dir_ + "/default_file.svg";
         if (!fs::exists(full_path)) return 0;
     }
@@ -150,7 +151,7 @@ ImTextureID IconManager::GetFolderIcon(bool is_open) {
 }
 
 ImTextureID IconManager::GetIconByName(const std::string& name) {
-    return GetTexture(name + ".svg");
+    return GetTexture(name + ".svg", false);
 }
 
 }  // namespace luce

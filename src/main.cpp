@@ -186,6 +186,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> icons_search_dirs = {
         exe_dir + "/assets/icons",
         exe_dir + "/../assets/icons",
+        exe_dir + "/../../assets/icons",
         "assets/icons"
     };
     for (const auto& d : icons_search_dirs) {

@@ -104,19 +104,6 @@ if(NOT EXISTS "${JETBRAINS_MONO_PATH}")
     endif()
 endif()
 
-# Copy assets (fonts and icons) and themes next to the executable so it can be found at runtime
-add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/assets_copied"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-            "$<TARGET_FILE_DIR:luce>/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/themes"
-            "$<TARGET_FILE_DIR:luce>/themes"
-    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/assets_copied"
-    COMMENT "Copying assets and themes to output directory"
-)
-
 # ── Luce executable ───────────────────────────────────────────────────────────
 
 file(GLOB_RECURSE LUCE_SOURCES CONFIGURE_DEPENDS src/*.cpp)
@@ -126,8 +113,6 @@ if(WIN32)
 endif()
 
 add_executable(luce ${LUCE_SOURCES})
-add_custom_target(copy_assets ALL DEPENDS "${CMAKE_BINARY_DIR}/assets_copied")
-add_dependencies(luce copy_assets)
 
 target_include_directories(luce PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -164,11 +149,19 @@ if(WIN32)
     )
 endif()
 
-# ── Copy Lua plugins to output directory ──────────────────────────────────────
+# ── Copy assets, themes, and Lua plugins to output directory ──────────────────
 add_custom_command(TARGET luce POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:luce>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+            "$<TARGET_FILE_DIR:luce>/assets"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:luce>/themes"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/themes"
+            "$<TARGET_FILE_DIR:luce>/themes"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:luce>/plugins"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/plugins"
             "$<TARGET_FILE_DIR:luce>/plugins"
-    COMMENT "Copying Lua plugins to output directory"
+    COMMENT "Copying assets, themes, and plugins to output directory"
 )
