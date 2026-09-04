@@ -122,6 +122,9 @@ void App::Render() {
         ImVec2 cursor_start = ImGui::GetCursorPos();
         ImGui::SetCursorPos(ImVec2(cursor_start.x + 8.0f * ui_scale_, cursor_start.y + 4.0f * ui_scale_));
 
+        ImVec2 active_btn_min(0, 0);
+        ImVec2 active_btn_max(0, 0);
+
         // Explorer Button
         ImTextureID explorer_icon = IconManager::Instance().GetIconByName("default_folder");
         if (explorer_icon) {
@@ -129,6 +132,10 @@ void App::Render() {
                 show_file_explorer_ = true;
                 show_source_control_ = false;
                 show_plugins_ = false;
+            }
+            if (show_file_explorer_) {
+                active_btn_min = ImGui::GetItemRectMin();
+                active_btn_max = ImGui::GetItemRectMax();
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Explorer");
         }
@@ -144,6 +151,10 @@ void App::Render() {
                 show_plugins_ = false;
                 GitManager::Instance().Refresh();
             }
+            if (show_source_control_) {
+                active_btn_min = ImGui::GetItemRectMin();
+                active_btn_max = ImGui::GetItemRectMax();
+            }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Source Control (Git)");
         }
 
@@ -157,22 +168,24 @@ void App::Render() {
                 show_file_explorer_ = false;
                 show_source_control_ = false;
             }
+            if (show_plugins_) {
+                active_btn_min = ImGui::GetItemRectMin();
+                active_btn_max = ImGui::GetItemRectMax();
+            }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Plugins");
         }
         ImGui::PopStyleColor(3);
 
-        // Active indicator line
-        ImVec2 draw_pos = ImGui::GetCursorScreenPos();
-        draw_pos.y -= 2.0f; // Shift slightly up
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        
-        float indicator_width = icon_size + 8.0f; // approximate button width
-        float start_x = draw_pos.x + 8.0f * ui_scale_;
-        if (show_source_control_) start_x += indicator_width + 4.0f; // offset for second button
-        else if (show_plugins_) start_x += (indicator_width + 4.0f) * 2.0f; // offset for third button
-
-        draw_list->AddLine(ImVec2(start_x, draw_pos.y), ImVec2(start_x + indicator_width, draw_pos.y), 
-                           IM_COL32(0, 122, 204, 255), 2.0f); // Blue VSCode color
+        // Active indicator line positioned precisely under the active button
+        if (active_btn_max.x > active_btn_min.x) {
+            float line_y = active_btn_max.y + 2.0f;
+            float pad_x = 4.0f * ui_scale_;
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            draw_list->AddLine(
+                ImVec2(active_btn_min.x + pad_x, line_y), 
+                ImVec2(active_btn_max.x - pad_x, line_y), 
+                IM_COL32(0, 122, 204, 255), 2.0f * ui_scale_);
+        }
 
         ImGui::Spacing();
         ImGui::Separator();
