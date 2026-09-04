@@ -1,6 +1,6 @@
 # Luce — A Modern Code Editor
 
-**Luce** is a lightweight, GPU-accelerated code editor written in C++23 using [Dear ImGui](https://github.com/ocornut/imgui), [SDL2](https://www.libsdl.org/), and OpenGL 3.3. Inspired by Zed and VS Code, it delivers an ultra-fast, native desktop editing experience with rich SVG file icons, Live Markdown Preview, Emmet snippets, interactive terminal, and a dynamic C ABI plugin system.
+**Luce** is a lightweight, GPU-accelerated code editor written in C++23 using [Dear ImGui](https://github.com/ocornut/imgui), [SDL2](https://www.libsdl.org/), and OpenGL 3.3. Inspired by Zed and VS Code, it delivers an ultra-fast, native desktop editing experience with rich SVG file icons, Live Markdown Preview, Emmet snippets, interactive terminal, and an extensible Lua 5.4 scripting plugin system.
 
 ![Status](https://img.shields.io/badge/status-active%20development-orange)
 ![C++](https://img.shields.io/badge/C%2B%2B-23-blue)

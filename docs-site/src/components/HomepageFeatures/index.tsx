@@ -51,14 +51,14 @@ const FeatureList: FeatureItem[] = [
   {
     title: (
       <Translate id="feature.plugins.title">
-        Natywne Wtyczki C ABI
+        Wtyczki w Języku Lua
       </Translate>
     ),
     Icon: Puzzle,
     color: '#10b981',
     description: (
       <Translate id="feature.plugins.desc">
-        Rozszerzaj polecenia, menu, paski stanu i bufory edytora za pomocą bibliotek współdzielonych z zerowym narzutem.
+        Pisz lekkie, bezpieczne rozszerzenia w języku Lua 5.4 z bezpośrednim dostępem do buforów, poleceń i paska stanu.
       </Translate>
     ),
   },

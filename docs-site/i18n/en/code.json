@@ -32,11 +32,11 @@
     "description": "Themes description"
   },
   "feature.plugins.title": {
-    "message": "Zero-Overhead C ABI Plugins",
+    "message": "Lua Scripting & Plugins",
     "description": "Plugins title"
   },
   "feature.plugins.desc": {
-    "message": "Extend commands, menus, status messages, and buffers using native C/C++ shared libraries with a rock-solid, ABI-stable interface.",
+    "message": "Write lightweight, secure extensions in Lua 5.4 with direct access to editor commands, buffers, and status bar without recompilation.",
     "description": "Plugins description"
   },
   "feature.layout.title": {

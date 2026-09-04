@@ -116,7 +116,7 @@ const config: Config = {
               to: '/docs/syntax/lexers',
             },
             {
-              label: 'Referencja C ABI',
+              label: 'API Pluginów Lua',
               to: '/docs/plugins/api-reference',
             },
           ],
@@ -140,7 +140,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.vsDark,
-      additionalLanguages: ['cpp', 'c', 'rust', 'cmake', 'css', 'json', 'bash', 'powershell', 'markdown'],
+      additionalLanguages: ['cpp', 'c', 'rust', 'cmake', 'css', 'json', 'bash', 'powershell', 'markdown', 'lua'],
     },
   } satisfies Preset.ThemeConfig,
 };

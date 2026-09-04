@@ -116,8 +116,8 @@ syntax highlighting, editing, and UI features.
 
 ## Future Work
 
-- **Plugin loading** — Implement `PluginManager` that scans `plugins/`
-  for .dll/.so files and loads them via the API in `plugin_api.h`.
+- **Plugin ecosystem** — Expand Lua plugin API with more editor hooks
+  (e.g., custom syntax providers, gutter annotations).
 - **Settings persistence** — Save/load user preferences (font, theme,
   tab size) to a JSON config file.
 - **Tree-sitter integration** — Replace hand-written lexers with
