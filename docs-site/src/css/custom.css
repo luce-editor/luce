@@ -1,0 +1,169 @@
+/**
+ * Luce Documentation Custom CSS
+ * Full support for both Light Mode and Dark Mode with solid backgrounds.
+ */
+
+:root {
+  --ifm-color-primary: #007acc;
+  --ifm-color-primary-dark: #006eb8;
+  --ifm-color-primary-darker: #0068ae;
+  --ifm-color-primary-darkest: #00568f;
+  --ifm-color-primary-light: #0086e0;
+  --ifm-color-primary-lighter: #0d8ce2;
+  --ifm-color-primary-lightest: #2ea0ea;
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, 'Courier New', monospace;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 122, 204, 0.1);
+
+  /* Light mode tokens */
+  --luce-hero-bg: #f8fafc;
+  --luce-hero-border: #e2e8f0;
+  --luce-hero-title: #0f172a;
+  --luce-hero-subtitle: #475569;
+
+  --luce-features-bg: #ffffff;
+  --luce-card-bg: #f8fafc;
+  --luce-card-border: #e2e8f0;
+  --luce-card-title: #0f172a;
+  --luce-card-desc: #475569;
+
+  --luce-btn-sec-bg: #f1f5f9;
+  --luce-btn-sec-color: #0f172a;
+  --luce-btn-sec-border: #cbd5e1;
+  --luce-btn-sec-hover-bg: #e2e8f0;
+}
+
+[data-theme='dark'] {
+  --ifm-background-color: #0b0c14;
+  --ifm-background-surface-color: #12131f;
+  --ifm-color-primary: #38bdf8;
+  --ifm-color-primary-dark: #0ea5e9;
+  --ifm-color-primary-darker: #0284c7;
+  --ifm-color-primary-darkest: #0369a1;
+  --ifm-color-primary-light: #7dd3fc;
+  --ifm-color-primary-lighter: #bae6fd;
+  --ifm-color-primary-lightest: #e0f2fe;
+  --docusaurus-highlighted-code-line-bg: rgba(56, 189, 248, 0.15);
+
+  /* Dark mode tokens */
+  --luce-hero-bg: #12131f;
+  --luce-hero-border: rgba(255, 255, 255, 0.08);
+  --luce-hero-title: #ffffff;
+  --luce-hero-subtitle: #94a3b8;
+
+  --luce-features-bg: #0b0c14;
+  --luce-card-bg: #141524;
+  --luce-card-border: rgba(255, 255, 255, 0.08);
+  --luce-card-title: #f8fafc;
+  --luce-card-desc: #94a3b8;
+
+  --luce-btn-sec-bg: rgba(255, 255, 255, 0.06);
+  --luce-btn-sec-color: #e2e8f0;
+  --luce-btn-sec-border: rgba(255, 255, 255, 0.15);
+  --luce-btn-sec-hover-bg: rgba(255, 255, 255, 0.12);
+}
+
+/* Solid Hero Section (No gradients) */
+.hero--primary {
+  background-color: var(--luce-hero-bg) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--luce-hero-border);
+  padding: 4.5rem 0;
+}
+
+.hero__title {
+  color: var(--luce-hero-title) !important;
+  font-size: 3.2rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+
+.hero__subtitle {
+  color: var(--luce-hero-subtitle) !important;
+  font-size: 1.25rem !important;
+  font-weight: 400;
+  max-width: 650px;
+  margin: 12px auto 32px auto !important;
+}
+
+/* Feature Section & Cards */
+.luce-features-section {
+  background-color: var(--luce-features-bg) !important;
+  padding: 56px 0;
+}
+
+.luce-card {
+  background-color: var(--luce-card-bg);
+  border: 1px solid var(--luce-card-border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.luce-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.luce-card-title {
+  font-size: 1.2rem !important;
+  margin-bottom: 10px !important;
+  color: var(--luce-card-title) !important;
+}
+
+.luce-card-desc {
+  color: var(--luce-card-desc) !important;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Clean Button Styles */
+.button--primary-luce {
+  background-color: #007acc;
+  color: #ffffff !important;
+  border: 1px solid #006eb8;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px 24px;
+  transition: all 0.2s ease-in-out;
+}
+
+.button--primary-luce:hover {
+  background-color: #008be5;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+}
+
+.button--secondary-luce {
+  background-color: var(--luce-btn-sec-bg);
+  color: var(--luce-btn-sec-color) !important;
+  border: 1px solid var(--luce-btn-sec-border);
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px 22px;
+  transition: all 0.2s ease-in-out;
+}
+
+.button--secondary-luce:hover {
+  background-color: var(--luce-btn-sec-hover-bg);
+  color: var(--luce-btn-sec-color) !important;
+  transform: translateY(-1px);
+}
+
+/* Navbar & Footer */
+.navbar {
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}

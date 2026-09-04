@@ -1,0 +1,43 @@
+/* Cyberpunk Neon Theme for Luce Editor */
+theme {
+    name: "Cyberpunk 2077";
+    background: #0f101d;
+    foreground: #f4eee4;
+    gutter-bg: #0b0c16;
+    gutter-fg: #464b73;
+    active-line: #1c1d30;
+    cursor: #00ffcc;
+    selection: #2e3052;
+    sidebar-bg: #0b0c16;
+    tab-bg: #0b0c16;
+    tab-active-bg: #0f101d;
+    tab-text: #464b73;
+    tab-active-text: #00ffcc;
+    statusbar-bg: #08090f;
+    statusbar-fg: #f4eee4;
+    terminal-bg: #0f101d;
+    terminal-fg: #f4eee4;
+    search-highlight: #ffee00;
+
+    /* Syntax Tokens */
+    syntax-keyword: #ff0055;
+    syntax-type: #00e5ff;
+    syntax-string: #fcee0a;
+    syntax-character: #fcee0a;
+    syntax-number: #ff7700;
+    syntax-comment: #464b73;
+    syntax-preprocessor: #ff0055;
+    syntax-operator: #00ffcc;
+    syntax-punctuation: #f4eee4;
+    syntax-function: #00ff99;
+    syntax-identifier: #f4eee4;
+    syntax-namespace: #00e5ff;
+    syntax-macro: #ff0055;
+    syntax-attribute: #00ff99;
+    syntax-tag: #ff0055;
+    syntax-tag-bracket: #00ffcc;
+    syntax-property: #00e5ff;
+    syntax-value: #fcee0a;
+    syntax-lifetime: #ff7700;
+    syntax-escape: #ff0055;
+}

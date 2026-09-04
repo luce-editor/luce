@@ -1,0 +1,43 @@
+/* Dracula Theme for Luce Editor */
+theme {
+    name: "Dracula";
+    background: #282a36;
+    foreground: #f8f8f2;
+    gutter-bg: #21222c;
+    gutter-fg: #6272a4;
+    active-line: #44475a;
+    cursor: #f8f8f0;
+    selection: #44475a;
+    sidebar-bg: #21222c;
+    tab-bg: #21222c;
+    tab-active-bg: #282a36;
+    tab-text: #6272a4;
+    tab-active-text: #f8f8f2;
+    statusbar-bg: #191a21;
+    statusbar-fg: #f8f8f2;
+    terminal-bg: #282a36;
+    terminal-fg: #f8f8f2;
+    search-highlight: #ffb86c;
+
+    /* Syntax Tokens */
+    syntax-keyword: #ff79c6;
+    syntax-type: #8be9fd;
+    syntax-string: #f1fa8c;
+    syntax-character: #f1fa8c;
+    syntax-number: #bd93f9;
+    syntax-comment: #6272a4;
+    syntax-preprocessor: #ff79c6;
+    syntax-operator: #ff79c6;
+    syntax-punctuation: #f8f8f2;
+    syntax-function: #50fa7b;
+    syntax-identifier: #f8f8f2;
+    syntax-namespace: #8be9fd;
+    syntax-macro: #ff79c6;
+    syntax-attribute: #50fa7b;
+    syntax-tag: #ff79c6;
+    syntax-tag-bracket: #f8f8f2;
+    syntax-property: #66d9ef;
+    syntax-value: #f1fa8c;
+    syntax-lifetime: #ffb86c;
+    syntax-escape: #ff79c6;
+}

@@ -1,0 +1,66 @@
+{
+  "homepage.tagline": {
+    "message": "Blazing-Fast, Minimalist Modern C++23 Code Editor",
+    "description": "The homepage tagline"
+  },
+  "homepage.getStarted": {
+    "message": "Get Started",
+    "description": "Get Started button"
+  },
+  "homepage.exploreThemes": {
+    "message": "Explore Themes",
+    "description": "Explore themes button"
+  },
+  "homepage.pluginSdk": {
+    "message": "Plugin SDK",
+    "description": "Plugin SDK button"
+  },
+  "feature.speed.title": {
+    "message": "C++23 Native Performance",
+    "description": "Speed title"
+  },
+  "feature.speed.desc": {
+    "message": "Sub-second cold startup, low memory footprint, and instantaneous responsiveness powered by Dear ImGui, SDL2, and OpenGL 3.3.",
+    "description": "Speed description"
+  },
+  "feature.themes.title": {
+    "message": "Rich Theme Engine & Hot Reload",
+    "description": "Themes title"
+  },
+  "feature.themes.desc": {
+    "message": "Craft custom themes using human-friendly CSS syntax with full syntax and UI tokens, reloaded live on the fly.",
+    "description": "Themes description"
+  },
+  "feature.plugins.title": {
+    "message": "Zero-Overhead C ABI Plugins",
+    "description": "Plugins title"
+  },
+  "feature.plugins.desc": {
+    "message": "Extend commands, menus, status messages, and buffers using native C/C++ shared libraries with a rock-solid, ABI-stable interface.",
+    "description": "Plugins description"
+  },
+  "feature.layout.title": {
+    "message": "Docking Layout & Activity Bar",
+    "description": "Layout title"
+  },
+  "feature.layout.desc": {
+    "message": "Sleek horizontal activity bar and flexible multi-panel docking workspace saved automatically across sessions.",
+    "description": "Layout description"
+  },
+  "feature.terminal.title": {
+    "message": "Embedded Subprocess Terminal",
+    "description": "Terminal title"
+  },
+  "feature.terminal.desc": {
+    "message": "Non-blocking interactive terminal console with dedicated input and auto-scrolling integrated directly into your workflow.",
+    "description": "Terminal description"
+  },
+  "feature.lexers.title": {
+    "message": "Virtual Scrolling & Lexers",
+    "description": "Lexers title"
+  },
+  "feature.lexers.desc": {
+    "message": "Edit 100k+ line files smoothly at 60+ FPS with stateful incremental token caching and fast native lexers.",
+    "description": "Lexers description"
+  }
+}

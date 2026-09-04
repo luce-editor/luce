@@ -1,0 +1,43 @@
+# C++
+build/
+bin/
+out/
+*.exe
+*.dll
+*.lib
+*.exp
+*.o
+*.out
+*.pdb
+*.ilk
+#CMake
+CmakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeFiles/
+_deps/
+CMakeUserPresets.json
+
+#IDE
+.vs/
+.vscode/
+.idea/
+*.sln
+*.vcxproj*
+*.user
+
+#Dear ImGUI runtime
+imgui.ini
+session.json
+
+# node/docosaurus
+docs-site/node_modules/
+docs-site/.docusaurus/
+docs-site/build/
+docs-site/.cache-loader/
+docs-site/.env*
+docs-site/.env.example
+
+.DS_Store
+Thumbs.db
+*.log
