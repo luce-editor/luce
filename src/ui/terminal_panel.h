@@ -48,6 +48,17 @@ private:
         int               rows = 24;
         bool              needs_scroll_to_bottom = false;
         bool              shell_started = false;
+
+        // Selection state
+        bool              has_selection = false;
+        bool              is_selecting = false;
+        int               sel_start_row = -1;
+        int               sel_start_col = -1;
+        int               sel_end_row = -1;
+        int               sel_end_col = -1;
+
+        std::string GetSelectedText() const;
+        bool IsCellSelected(int row, int col) const;
         
         static void OutputCallback(const char* s, size_t len, void* user);
 

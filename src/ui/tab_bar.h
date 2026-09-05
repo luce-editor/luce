@@ -59,6 +59,12 @@ public:
                 ImFont* bold_font = nullptr, ImFont* italic_font = nullptr,
                 ImFont* h1_font = nullptr, ImFont* h2_font = nullptr);
 
+    /// Reload all non-dirty open tabs from disk (e.g. after branch switch or external change).
+    void ReloadAllFromDisk();
+
+    /// Reload a specific tab from disk if it is not dirty.
+    bool ReloadTab(int index);
+
     // ── Accessors ─────────────────────────────────────────────────────────
 
     Tab*        ActiveTab();

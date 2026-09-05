@@ -138,11 +138,13 @@ void FileExplorer::Render() {
 
 void FileExplorer::RenderModals() {
     float modal_width = 380.0f;
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 
     if (show_new_file_modal_) {
         ImGui::OpenPopup("New File##modal");
         show_new_file_modal_ = false;
     }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(modal_width, 0), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal("New File##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Enter file name (in %s):", target_dir_.c_str());
@@ -173,6 +175,7 @@ void FileExplorer::RenderModals() {
         ImGui::OpenPopup("New Folder##modal");
         show_new_folder_modal_ = false;
     }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(modal_width, 0), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal("New Folder##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Enter folder name (in %s):", target_dir_.c_str());
@@ -200,6 +203,7 @@ void FileExplorer::RenderModals() {
         ImGui::OpenPopup("Rename##modal");
         show_rename_modal_ = false;
     }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(modal_width, 0), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal("Rename##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Enter new name:");
@@ -230,6 +234,7 @@ void FileExplorer::RenderModals() {
         ImGui::OpenPopup("Delete##modal");
         show_delete_modal_ = false;
     }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(modal_width, 0), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal("Delete##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("Are you sure you want to delete:\n%s?", target_path_.c_str());

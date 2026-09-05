@@ -226,9 +226,14 @@ int main(int argc, char* argv[]) {
                 ImGui_ImplSDL2_ProcessEvent(&wait_event);
                 if (wait_event.type == SDL_QUIT) running = false;
                 if (wait_event.type == SDL_WINDOWEVENT) {
-                    if (wait_event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) window_focused = true;
-                    else if (wait_event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) window_focused = false;
-                    else if (wait_event.window.event == SDL_WINDOWEVENT_CLOSE && wait_event.window.windowID == SDL_GetWindowID(window)) running = false;
+                    if (wait_event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                        window_focused = true;
+                        app.OnFocusGained();
+                    } else if (wait_event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                        window_focused = false;
+                    } else if (wait_event.window.event == SDL_WINDOWEVENT_CLOSE && wait_event.window.windowID == SDL_GetWindowID(window)) {
+                        running = false;
+                    }
                 } else if (wait_event.type == SDL_DROPFILE) {
                     std::string path(wait_event.drop.file);
                     std::ranges::replace(path, '\\', '/');
@@ -253,6 +258,7 @@ int main(int argc, char* argv[]) {
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                         window_focused = true;
+                        app.OnFocusGained();
                     } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                         window_focused = false;
                     } else if (event.window.event == SDL_WINDOWEVENT_CLOSE &&

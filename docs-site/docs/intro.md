@@ -17,14 +17,15 @@ Zaprojektowany z myślą o minimalizmie, bezkompromisowej responsywności i modu
 
 ## Główne Funkcje
 
-- ⚡ **Wydajność C++23:** Błyskawiczny czas startu poniżej sekundy, minimalne opóźnienia i znikome zużycie RAM.
-- 🎨 **Bogaty Silnik Motywów:** Wbudowane palety VS Code Dark Modern, Catppuccin Mocha, One Dark i Nord, a także obsługa własnych plików CSS z funkcją **Hot Reload na żywo**.
-- 🧩 **System Wtyczek Lua 5.4:** Skryptowe rozszerzenia edytora — wystarczy plik `.lua` w folderze `plugins/`, bez kompilacji i bez konfiguracji.
-- 📐 **Elastyczny Menedżer Dokowania:** Oparty o Dear ImGui Docking, pozwalający dowolnie układać edytor, pasek boczny oraz dolne panele.
-- 🖥️ **Wbudowany Terminal:** Wielosesyjny terminal VT100 z obsługą kart, PowerShell (`pwsh.exe`) / Bash, synchronizacją katalogu projektu i TrueColor.
-- ⚠️ **Wykrywanie Problemów (Diagnostics):** Dedykowana zakładka Problems z nawigacją — podwójne kliknięcie przenosi bezpośrednio do wiersza z błędem.
-- 🔍 **Command Palette i Quick Open:** Wyszukiwarka poleceń (`Ctrl+Shift+P`), szybkie otwieranie plików (`Ctrl+P`) oraz skok do linii (`:numer_linii`).
-- 🔤 **Wirtualne Przewijanie:** Płynna edycja plików liczących ponad 100 000 linii w stałych 60+ FPS dzięki buforowi linii i inkrementalnym lekserom.
+- **Wydajność C++23:** Błyskawiczny czas startu poniżej sekundy, minimalne opóźnienia i znikome zużycie RAM.
+- **Bogaty Silnik Motywów:** Wbudowane palety VS Code Dark Modern, Catppuccin Mocha, One Dark i Nord, a także obsługa własnych plików CSS z funkcją **Hot Reload na żywo**.
+- **System Wtyczek Lua 5.4:** Skryptowe rozszerzenia edytora — wystarczy plik `.lua` w folderze `plugins/`, bez kompilacji i bez konfiguracji.
+- **Elastyczny Menedżer Dokowania:** Oparty o Dear ImGui Docking, pozwalający dowolnie układać edytor, pasek boczny oraz dolne panele.
+- **Wbudowany Terminal:** Wielosesyjny terminal VT100 z obsługą kart, PowerShell (`pwsh.exe`) / Bash, synchronizacją katalogu projektu i TrueColor.
+- **Pełna Kontrola Wersji Git:** Asynchroniczny panel Source Control (60 FPS) z gałęziami, synchronizacją Push/Pull, schowkiem (stash), tagami, klonowaniem repozytoriów i bezpiecznymi oknami potwierdzenia.
+- **Wykrywanie Problemów (Diagnostics):** Dedykowana zakładka Problems z nawigacją — podwójne kliknięcie przenosi bezpośrednio do wiersza z błędem.
+- **Command Palette i Quick Open:** Wyszukiwarka poleceń (`Ctrl+Shift+P`), szybkie otwieranie plików (`Ctrl+P`) oraz skok do linii (`:numer_linii`).
+- **Wirtualne Przewijanie:** Płynna edycja plików liczących ponad 100 000 linii w stałych 60+ FPS dzięki buforowi linii i inkrementalnym lekserom.
 
 ---
 

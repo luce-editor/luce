@@ -39,10 +39,21 @@ Luce pozwala na pracę z wieloma równoległymi sesjami terminala:
 
 ---
 
+## Zaznaczanie Tekstu i Schowek
+
+Terminal w Luce obsługuje intuicyjne zaznaczanie tekstu za pomocą myszy (z podświetleniem zaznaczonego obszaru) oraz dedykowane skróty kopiowania i wklejania:
+- **Zaznaczanie myszą**: Przytrzymaj lewy przycisk myszy i przeciągnij kursor nad tekstem w buforze terminala, aby go zaznaczyć.
+- **Kopiowanie bez kolizji z SIGINT**: Aby skrót `Ctrl+C` mógł niezawodnie przerywać działające programy w konsoli, do kopiowania zaznaczenia służy dedykowany skrót `Win+Shift+C` (lub `Cmd+Shift+C` na macOS, `Ctrl+Shift+C` na Linuxie).
+- **Wklejanie**: Szybkie wklejanie ze schowka systemowego za pomocą `Win+Shift+V` (lub `Cmd+Shift+V` / `Ctrl+Shift+V`) oraz standardowego `Ctrl+V`.
+
+---
+
 ## Skróty Klawiszowe
 
 | Skrót | Działanie |
 | :--- | :--- |
 | `Ctrl+` ` (Tylda / Backtick) | Przełącz widoczność dolnego panelu z terminalem |
-| `Ctrl+C` / `Ctrl+V` | Kopiowanie i wklejanie |
-| `Tab` | Autouzupełnianie poleceń powłoki |
+| `Win+Shift+C` / `Ctrl+Shift+C` | Kopiowanie zaznaczonego tekstu do schowka |
+| `Win+Shift+V` / `Ctrl+Shift+V` | Wklejanie tekstu ze schowka |
+| `Ctrl+C` | Przerwanie aktywnego procesu powłoki (SIGINT) |
+| `Tab` | Autouzupełnianie poleceń i ścieżek powłoki |

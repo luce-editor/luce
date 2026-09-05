@@ -103,7 +103,7 @@ cmake --build build
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
 | `Ctrl+/` | Toggle comment |
 | `Ctrl+Tab` | Switch to next tab |
-| `Ctrl+\`` | Toggle terminal |
+| `Ctrl+` | Toggle terminal |
 | `Ctrl+=` / `Ctrl+-` | Zoom In / Zoom Out GUI |
 | `Ctrl+0` | Reset Zoom to 100% |
 | `Tab` | Expand Emmet abbreviation (HTML) / Indent |

@@ -132,7 +132,7 @@ bool TabBar::SaveActive() {
     bool ok = tab->buffer->SaveToFile(tab->filepath);
     if (ok) {
         tab->buffer->ClearDirty();
-        GitManager::Instance().Refresh();
+        GitManager::Instance().RefreshAsync();
         DiagnosticRunner::Instance().CheckFile(tab->filepath);
     }
     return ok;
@@ -148,7 +148,7 @@ bool TabBar::SaveActiveAs(const std::string& path) {
         tab->title    = platform::GetFilename(path);
         tab->editor.SetFilePath(path);
         tab->buffer->ClearDirty();
-        GitManager::Instance().Refresh();
+        GitManager::Instance().RefreshAsync();
         DiagnosticRunner::Instance().CheckFile(tab->filepath);
 
         // Re-detect language.
@@ -172,6 +172,47 @@ bool TabBar::CloseTab(int index) {
         active_ = static_cast<int>(tabs_.size()) - 1;
     }
     return true;
+}
+
+bool TabBar::ReloadTab(int index) {
+    if (index < 0 || index >= static_cast<int>(tabs_.size())) return false;
+    auto& tab = tabs_[index];
+    if (tab->filepath.empty() || tab->is_image) return false;
+
+    if (!fs::exists(tab->filepath)) {
+        if (!tab->buffer->IsDirty()) {
+            CloseTab(index);
+            return true;
+        }
+        return false;
+    }
+
+    if (!tab->buffer->IsDirty()) {
+        tab->buffer->LoadFromFile(tab->filepath);
+        if (tab->highlighter) {
+            tab->highlighter->InvalidateLines(0, tab->buffer->GetLineCount());
+        }
+        return true;
+    }
+    return false;
+}
+
+void TabBar::ReloadAllFromDisk() {
+    for (int i = static_cast<int>(tabs_.size()) - 1; i >= 0; --i) {
+        auto& tab = tabs_[i];
+        if (tab->filepath.empty() || tab->is_image) continue;
+
+        if (!fs::exists(tab->filepath)) {
+            if (!tab->buffer->IsDirty()) {
+                CloseTab(i);
+            }
+        } else if (!tab->buffer->IsDirty()) {
+            tab->buffer->LoadFromFile(tab->filepath);
+            if (tab->highlighter) {
+                tab->highlighter->InvalidateLines(0, tab->buffer->GetLineCount());
+            }
+        }
+    }
 }
 
 void TabBar::ToggleActiveMarkdownPreview() {

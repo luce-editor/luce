@@ -237,12 +237,17 @@ CommandResult RunCommand(const std::string& command, const std::string& cwd) {
     si.hStdInput = NULL;
 
     PROCESS_INFORMATION pi = {};
+    std::string win_cwd = cwd;
+    std::ranges::replace(win_cwd, '/', '\\');
+    const char* working_dir = win_cwd.empty() ? nullptr : win_cwd.c_str();
+
     std::string cmd = "cmd.exe /c " + command;
     std::vector<char> cmd_buf(cmd.begin(), cmd.end());
     cmd_buf.push_back('\0');
 
-    const char* working_dir = cwd.empty() ? nullptr : cwd.c_str();
-    if (CreateProcessA(NULL, cmd_buf.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, working_dir, &si, &pi)) {
+    BOOL spawned = CreateProcessA(NULL, cmd_buf.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, working_dir, &si, &pi);
+
+    if (spawned) {
         CloseHandle(hWritePipe);
         hWritePipe = NULL;
 

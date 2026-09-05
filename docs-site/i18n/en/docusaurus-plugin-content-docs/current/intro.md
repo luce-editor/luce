@@ -22,6 +22,7 @@ Designed with minimalism, extreme responsiveness, and modular extensibility in m
 - **Lua 5.4 Plugin System:** Scriptable editor extensions — just drop a `.lua` file into the `plugins/` folder, no compilation or setup required.
 - **Docking Window Manager:** Powered by Dear ImGui Docking, allowing full flexibility to arrange Editor, Sidebar, and bottom dock panels.
 - **Embedded Terminal:** Multi-session VT100 terminal with tab management, PowerShell (`pwsh.exe`) / Bash, automatic project folder sync, and TrueColor support.
+- **Native Git Source Control:** 60 FPS asynchronous version control panel with branch management, Push/Pull sync, stashing, tagging, repository cloning, and safety confirmation modals.
 - **Diagnostics & Problems Panel:** Dedicated Problems tab with clickable error navigation — double-clicking jumps directly to the source code line.
 - **Command Palette & Quick Open:** Full fuzzy-style command palette (`Ctrl+Shift+P`), file jumping (`Ctrl+P`), and line jumping (`:line_number`).
 - **Virtual Scrolling & Incremental Highlighting:** Documents with 100,000+ lines render smoothly at 60+ FPS using line-by-line token caching and stateful hand-written lexers.

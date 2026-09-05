@@ -35,7 +35,95 @@ std::string DefaultTabTitle() {
 #endif
 }
 
+int EncodeUtf8(uint32_t c, char* out) {
+    if (c < 0x80) {
+        out[0] = static_cast<char>(c);
+        out[1] = 0;
+        return 1;
+    } else if (c < 0x800) {
+        out[0] = static_cast<char>(0xC0 | (c >> 6));
+        out[1] = static_cast<char>(0x80 | (c & 0x3F));
+        out[2] = 0;
+        return 2;
+    } else if (c < 0x10000) {
+        out[0] = static_cast<char>(0xE0 | (c >> 12));
+        out[1] = static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+        out[2] = static_cast<char>(0x80 | (c & 0x3F));
+        out[3] = 0;
+        return 3;
+    } else if (c < 0x110000) {
+        out[0] = static_cast<char>(0xF0 | (c >> 18));
+        out[1] = static_cast<char>(0x80 | ((c >> 12) & 0x3F));
+        out[2] = static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+        out[3] = static_cast<char>(0x80 | (c & 0x3F));
+        out[4] = 0;
+        return 4;
+    }
+    return 0;
+}
+
 } // namespace
+
+std::string TerminalPanel::TerminalSession::GetSelectedText() const {
+    if (!has_selection || !vterm_screen) return "";
+
+    int r0 = sel_start_row;
+    int c0 = sel_start_col;
+    int r1 = sel_end_row;
+    int c1 = sel_end_col;
+
+    if (r0 > r1 || (r0 == r1 && c0 > c1)) {
+        std::swap(r0, r1);
+        std::swap(c0, c1);
+    }
+
+    std::string result;
+    for (int r = r0; r <= r1; ++r) {
+        int start_c = (r == r0) ? c0 : 0;
+        int end_c = (r == r1) ? c1 : cols - 1;
+        std::string line;
+        for (int c = start_c; c <= end_c; ++c) {
+            VTermPos pos = { r, c };
+            VTermScreenCell cell;
+            if (vterm_screen_get_cell(static_cast<VTermScreen*>(vterm_screen), pos, &cell)) {
+                if (cell.chars[0] != 0) {
+                    char buf[7] = {0};
+                    EncodeUtf8(cell.chars[0], buf);
+                    line += buf;
+                } else {
+                    line += ' ';
+                }
+            } else {
+                line += ' ';
+            }
+        }
+        while (!line.empty() && line.back() == ' ') {
+            line.pop_back();
+        }
+        if (r > r0) result += "\n";
+        result += line;
+    }
+    return result;
+}
+
+bool TerminalPanel::TerminalSession::IsCellSelected(int row, int col) const {
+    if (!has_selection && !is_selecting) return false;
+    int r0 = sel_start_row;
+    int c0 = sel_start_col;
+    int r1 = sel_end_row;
+    int c1 = sel_end_col;
+    if (r0 > r1 || (r0 == r1 && c0 > c1)) {
+        std::swap(r0, r1);
+        std::swap(c0, c1);
+    }
+    if (row < r0 || row > r1) return false;
+    if (r0 == r1) {
+        return col >= c0 && col <= c1;
+    }
+    if (row == r0) return col >= c0;
+    if (row == r1) return col <= c1;
+    return true;
+}
 
 void TerminalPanel::TerminalSession::OutputCallback(const char* s, size_t len, void* user) {
     auto* session = static_cast<TerminalPanel::TerminalSession*>(user);
@@ -267,14 +355,87 @@ void TerminalPanel::Render(const Theme& theme) {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 origin = ImGui::GetCursorScreenPos();
         
-        // Handle input if focused
-        if (ImGui::IsWindowFocused() || ImGui::IsWindowHovered()) {
-            if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                ImGui::SetWindowFocus();
+        ImGuiIO& io = ImGui::GetIO();
+        bool is_hovered = ImGui::IsWindowHovered();
+        bool is_focused = ImGui::IsWindowFocused();
+
+        // Mouse text selection
+        if (is_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            ImGui::SetWindowFocus();
+            int m_col = std::clamp(static_cast<int>((io.MousePos.x - origin.x) / char_width), 0, current.cols - 1);
+            int m_row = std::clamp(static_cast<int>((io.MousePos.y - origin.y) / line_height), 0, current.rows - 1);
+            current.is_selecting = true;
+            current.sel_start_row = m_row;
+            current.sel_start_col = m_col;
+            current.sel_end_row = m_row;
+            current.sel_end_col = m_col;
+            current.has_selection = false;
+        }
+
+        if (current.is_selecting) {
+            int m_col = std::clamp(static_cast<int>((io.MousePos.x - origin.x) / char_width), 0, current.cols - 1);
+            int m_row = std::clamp(static_cast<int>((io.MousePos.y - origin.y) / line_height), 0, current.rows - 1);
+            current.sel_end_row = m_row;
+            current.sel_end_col = m_col;
+            if (current.sel_start_row != current.sel_end_row || current.sel_start_col != current.sel_end_col) {
+                current.has_selection = true;
             }
-            if (ImGui::IsWindowFocused()) {
-                ImGuiIO& io = ImGui::GetIO();
-                
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                current.is_selecting = false;
+                if (current.sel_start_row == current.sel_end_row && current.sel_start_col == current.sel_end_col) {
+                    current.has_selection = false;
+                }
+            }
+        }
+
+        // Handle keyboard input if focused
+        if (is_focused) {
+            bool is_copy = false;
+            bool is_paste = false;
+
+            // Win+Shift+C (Super + Shift + C) / Win+Shift+V (Super + Shift + V)
+            if (io.KeySuper && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_C, false)) is_copy = true;
+            if (io.KeySuper && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_V, false)) is_paste = true;
+
+            // Ctrl+Shift+C / Ctrl+Shift+V
+            if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_C, false)) is_copy = true;
+            if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_V, false)) is_paste = true;
+
+#ifdef __APPLE__
+            if (io.KeySuper && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_C, false)) is_copy = true;
+            if (io.KeySuper && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_V, false)) is_paste = true;
+#endif
+
+            // Ctrl+C with active selection copies instead of sending SIGINT
+            if (io.KeyCtrl && !io.KeyShift && !io.KeyAlt && !io.KeySuper && ImGui::IsKeyPressed(ImGuiKey_C, false) && current.has_selection) {
+                is_copy = true;
+            }
+            // Standard Ctrl+V paste
+            if (io.KeyCtrl && !io.KeyShift && !io.KeyAlt && !io.KeySuper && ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                is_paste = true;
+            }
+
+            if (is_copy && current.has_selection) {
+                std::string text = current.GetSelectedText();
+                if (!text.empty()) {
+                    ImGui::SetClipboardText(text.c_str());
+                }
+            }
+
+            if (is_paste) {
+                const char* clip = ImGui::GetClipboardText();
+                if (clip && clip[0] != '\0') {
+                    current.process.Write(clip);
+                }
+            }
+
+            // Escape clears selection
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape) && current.has_selection) {
+                current.has_selection = false;
+            }
+
+            // Only process general text/character input if copy/paste wasn't triggered
+            if (!is_copy && !is_paste) {
                 // Text input
                 for (int n = 0; n < io.InputQueueCharacters.Size; n++) {
                     unsigned int c = io.InputQueueCharacters[n];
@@ -282,20 +443,20 @@ void TerminalPanel::Render(const Theme& theme) {
                         vterm_keyboard_unichar((VTerm*)current.vterm, c, VTERM_MOD_NONE);
                     }
                 }
-                
+
                 // Key modifiers
                 VTermModifier mod = VTERM_MOD_NONE;
                 if (io.KeyCtrl) mod = (VTermModifier)(mod | VTERM_MOD_CTRL);
                 if (io.KeyAlt) mod = (VTermModifier)(mod | VTERM_MOD_ALT);
                 if (io.KeyShift) mod = (VTermModifier)(mod | VTERM_MOD_SHIFT);
-                
+
                 // Special keys mapping
                 auto map_key = [&](ImGuiKey imgui_key, VTermKey vterm_key) {
                     if (ImGui::IsKeyPressed(imgui_key)) {
                         vterm_keyboard_key((VTerm*)current.vterm, vterm_key, mod);
                     }
                 };
-                
+
                 map_key(ImGuiKey_Enter, VTERM_KEY_ENTER);
                 map_key(ImGuiKey_Tab, VTERM_KEY_TAB);
                 map_key(ImGuiKey_Backspace, VTERM_KEY_BACKSPACE);
@@ -312,10 +473,10 @@ void TerminalPanel::Render(const Theme& theme) {
                 map_key(ImGuiKey_Delete, VTERM_KEY_DEL);
             }
         }
-        
+
         // Render terminal cells
         VTermScreen* vts = (VTermScreen*)current.vterm_screen;
-        
+
         for (int row = 0; row < current.rows; ++row) {
             for (int col = 0; col < current.cols; ++col) {
                 VTermPos pos = { row, col };
@@ -323,9 +484,13 @@ void TerminalPanel::Render(const Theme& theme) {
                 if (vterm_screen_get_cell(vts, pos, &cell)) {
                     float x = origin.x + col * char_width;
                     float y = origin.y + row * line_height;
-                    
+
+                    bool is_sel = current.IsCellSelected(row, col);
+
                     // Background
-                    if (!VTERM_COLOR_IS_DEFAULT_BG(&cell.bg)) {
+                    if (is_sel) {
+                        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + char_width * cell.width, y + line_height), IM_COL32(38, 79, 120, 200));
+                    } else if (!VTERM_COLOR_IS_DEFAULT_BG(&cell.bg)) {
                         uint8_t br = 0, bg = 0, bb = 0;
                         if (VTERM_COLOR_IS_INDEXED(&cell.bg)) {
                             uint8_t idx = cell.bg.indexed.idx;
@@ -345,24 +510,24 @@ void TerminalPanel::Render(const Theme& theme) {
                             bg = cell.bg.rgb.green;
                             bb = cell.bg.rgb.blue;
                         }
-                        
+
                         // Ignore extremely dark backgrounds (like ConPTY 12,12,12) to keep UI theme intact
                         if (!(br < 20 && bg < 20 && bb < 20)) {
                             ImU32 bg_color = IM_COL32(br, bg, bb, 255);
                             dl->AddRectFilled(ImVec2(x, y), ImVec2(x + char_width * cell.width, y + line_height), bg_color);
                         }
                     }
-                    
+
                     // Text
                     if (cell.chars[0] != 0 && cell.chars[0] != ' ') {
                         ImU32 fg_color = ImGui::GetColorU32(ImGuiCol_Text);
-                        
+
                         // PSReadLine InlinePrediction is \e[97;2;3m (italic=1, faint/dim=1)
                         if (cell.attrs.italic) {
                             fg_color = IM_COL32(120, 120, 120, 255); // Visible muted gray for predictions!
                         } else if (!VTERM_COLOR_IS_DEFAULT_FG(&cell.fg)) {
                             uint8_t r = 255, g = 255, b = 255;
-                            
+
                             if (VTERM_COLOR_IS_INDEXED(&cell.fg)) {
                                 uint8_t idx = cell.fg.indexed.idx;
                                 // VS Code Dark Modern palette
@@ -383,7 +548,7 @@ void TerminalPanel::Render(const Theme& theme) {
                                 g = cell.fg.rgb.green;
                                 b = cell.fg.rgb.blue;
                             }
-                            
+
                             // Heuristic to fix PSReadLine colors emitted as TrueColor by ConPTY:
                             // 1. Dark Gray (Suggestions) -> Make it visibly distinct gray
                             if (r == g && g == b && r > 0 && r < 140) {
@@ -393,30 +558,24 @@ void TerminalPanel::Render(const Theme& theme) {
                             else if ((b > 180 && r < 120) || (r > 150 && g > 150 && b < 100)) {
                                 r = 255; g = 255; b = 255;
                             }
-                            
+
                             fg_color = IM_COL32(r, g, b, 255);
                         }
-                        
+
                         char utf8_buf[7] = {0};
-                        // Very naive unicode to utf8
-                        unsigned int c = cell.chars[0];
-                        if (c < 0x80) { utf8_buf[0] = c; }
-                        else { 
-                            // Fallback for simplicity
-                            utf8_buf[0] = '?'; 
-                        }
-                        
+                        EncodeUtf8(cell.chars[0], utf8_buf);
+
                         dl->AddText(ImVec2(x, y), fg_color, utf8_buf);
                     }
                 }
             }
         }
-        
+
         // Render Cursor
         VTermState* state = vterm_obtain_state((VTerm*)current.vterm);
         VTermPos cursor_pos;
         vterm_state_get_cursorpos(state, &cursor_pos);
-        
+
         if (ImGui::IsWindowFocused()) {
             float cx = origin.x + cursor_pos.col * char_width;
             float cy = origin.y + cursor_pos.row * line_height;

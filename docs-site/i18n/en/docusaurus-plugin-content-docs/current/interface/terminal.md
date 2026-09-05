@@ -39,10 +39,21 @@ Luce supports multiple concurrent terminal sessions:
 
 ---
 
+## Text Selection & Clipboard
+
+The terminal in Luce supports intuitive mouse-based text selection with visual highlighting, alongside dedicated copy/paste shortcuts:
+- **Mouse Selection**: Click and drag across terminal rows to highlight text.
+- **Conflict-Free Copying**: To preserve standard `Ctrl+C` for terminating running terminal processes (SIGINT), text copying is bound to `Win+Shift+C` (Windows), `Cmd+Shift+C` (macOS), or `Ctrl+Shift+C` (Linux).
+- **Pasting**: Paste clipboard content instantly via `Win+Shift+V` (or `Cmd+Shift+V` / `Ctrl+Shift+V`) as well as standard `Ctrl+V`.
+
+---
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
 | `Ctrl+` ` (Backtick) | Toggle bottom panel / terminal visibility |
-| `Ctrl+C` / `Ctrl+V` | Copy and paste in terminal |
-| `Tab` | Shell auto-completion |
+| `Win+Shift+C` / `Ctrl+Shift+C` | Copy selected terminal text to clipboard |
+| `Win+Shift+V` / `Ctrl+Shift+V` | Paste text into active terminal session |
+| `Ctrl+C` | Send interrupt signal to running shell process (SIGINT) |
+| `Tab` | Shell command and path autocompletion |

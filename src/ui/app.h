@@ -28,6 +28,9 @@ public:
     /// Handle a file dropped onto the window.
     void OnFileDrop(const std::string& path);
 
+    /// Handle application window gaining focus.
+    void OnFocusGained();
+
     /// Whether the app wants to quit (e.g. user clicked close).
     bool WantsQuit() const { return wants_quit_; }
 
@@ -59,11 +62,34 @@ public:
     class ToastManager& GetToastManager() { return toast_manager_; }
     void TriggerSaveSession() { SaveSession(); }
 
+    struct ConfirmationModal {
+        bool request_open = false;
+        std::string title = "Confirm Action";
+        std::string message;
+        std::string confirm_label = "Confirm";
+        ImVec4 confirm_color = ImVec4(0.85f, 0.25f, 0.25f, 1.0f);
+        std::function<void()> on_confirm;
+    };
+
+    void RequestConfirmation(const std::string& title,
+                             const std::string& message,
+                             const std::string& confirm_label,
+                             const ImVec4& confirm_color,
+                             std::function<void()> on_confirm) {
+        confirm_modal_.title = title;
+        confirm_modal_.message = message;
+        confirm_modal_.confirm_label = confirm_label;
+        confirm_modal_.confirm_color = confirm_color;
+        confirm_modal_.on_confirm = std::move(on_confirm);
+        confirm_modal_.request_open = true;
+    }
+
 private:
     // ── Rendering helpers ─────────────────────────────────────────────────
     void RenderMenuBar();
     void RenderStatusBar();
     void RenderSourceControl();
+    void RenderGitModals();
     void SetupDockspace();
 
     // ── Session persistence ──────────────────────────────────────────────
@@ -102,6 +128,13 @@ private:
     bool              show_about_modal_   = false;
     bool              show_git_branch_modal_ = false;
     bool              show_git_remote_modal_ = false;
+    bool              show_git_stash_modal_  = false;
+    bool              show_git_tags_modal_    = false;
+    bool              show_git_clone_modal_   = false;
+    bool              show_git_output_modal_  = false;
+    bool              git_view_as_tree_       = false;
+
+    ConfirmationModal confirm_modal_;
 };
 
 }  // namespace luce

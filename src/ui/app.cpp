@@ -103,6 +103,9 @@ void App::Render() {
     // Menu bar.
     RenderMenuBar();
 
+    // Git Modals (Confirmation, Branches, Remotes, Stashes, Tags, Clone, Output)
+    RenderGitModals();
+
     // Sidebar panel (contains horizontal activity bar + active view).
     bool show_sidebar = show_file_explorer_ || show_source_control_ || show_plugins_;
     if (show_sidebar) {
@@ -149,7 +152,7 @@ void App::Render() {
                 show_source_control_ = true;
                 show_file_explorer_ = false;
                 show_plugins_ = false;
-                GitManager::Instance().Refresh();
+                GitManager::Instance().RefreshAsync();
             }
             if (show_source_control_) {
                 active_btn_min = ImGui::GetItemRectMin();
@@ -664,6 +667,8 @@ void App::RenderMenuBar() {
         ImGui::OpenPopup("About Luce##modal");
         show_about_modal_ = false;
     }
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("About Luce##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextColored(ImVec4(0.0f, 0.47f, 0.83f, 1.0f), "Luce Code Editor");
         ImGui::Text("Version: %s", LUCE_VERSION);
@@ -704,142 +709,697 @@ void App::RenderMenuBar() {
         ImGui::EndPopup();
     }
 
+}
+
+void App::RenderGitModals() {
+    auto& git = GitManager::Instance();
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+
+    // ── 1. Reusable Confirmation Modal (About Luce style) ───────────────
+    if (confirm_modal_.request_open) {
+        ImGui::OpenPopup("Confirm Action##modal");
+        confirm_modal_.request_open = false;
+    }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(420.0f * ui_scale_, 0.0f), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal("Confirm Action##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(confirm_modal_.confirm_color, "%s", confirm_modal_.title.c_str());
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", confirm_modal_.message.c_str());
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float btn_w = (avail_w - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+
+        ImGui::PushStyleColor(ImGuiCol_Button, confirm_modal_.confirm_color);
+        if (ImGui::Button(confirm_modal_.confirm_label.c_str(), ImVec2(btn_w, 0))) {
+            if (confirm_modal_.on_confirm) {
+                confirm_modal_.on_confirm();
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(btn_w, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ── 2. Git Branches Modal (Tabs: Switch & Create, Rename, Delete, Merge) ──
     if (show_git_branch_modal_) {
         ImGui::OpenPopup("Git Branches##modal");
         show_git_branch_modal_ = false;
     }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Git Branches##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        auto& git = GitManager::Instance();
-        static char branch_filter[64] = "";
-        static char new_branch_name[64] = "";
-
         ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Current Branch: %s", git.GetBranch().c_str());
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        // ── Create new branch ───────────────────────────────────────────────
-        ImGui::Text("Create New Branch:");
-        ImGui::SetNextItemWidth(240.0f);
-        ImGui::InputTextWithHint("##new_branch_input", "New branch name...", new_branch_name, sizeof(new_branch_name));
-        ImGui::SameLine();
-        if (ImGui::Button("Create & Switch")) {
-            if (strlen(new_branch_name) > 0) {
-                std::string err;
-                if (git.CreateBranch(new_branch_name, true, err)) {
-                    toast_manager_.ShowSuccess("Git: Created and checked out branch '" + std::string(new_branch_name) + "'");
-                    new_branch_name[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                } else {
-                    toast_manager_.ShowError(err);
+        if (ImGui::BeginTabBar("##branch_tabs")) {
+            // Tab 1: Switch & Create
+            if (ImGui::BeginTabItem("Switch & Create")) {
+                static char new_branch_name[64] = "";
+                ImGui::Spacing();
+                ImGui::Text("Create New Branch:");
+                ImGui::SetNextItemWidth(260.0f);
+                ImGui::InputTextWithHint("##new_branch_input", "New branch name...", new_branch_name, sizeof(new_branch_name));
+                ImGui::SameLine();
+                if (ImGui::Button("Create & Switch")) {
+                    if (strlen(new_branch_name) > 0) {
+                        std::string err;
+                        if (git.CreateBranch(new_branch_name, true, err)) {
+                            tab_bar_.ReloadAllFromDisk();
+                            ScanProjectFiles();
+                            toast_manager_.ShowSuccess("Git: Created and switched to branch '" + std::string(new_branch_name) + "'");
+                            new_branch_name[0] = '\0';
+                            ImGui::CloseCurrentPopup();
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    } else {
+                        toast_manager_.ShowWarning("Git: Branch name cannot be empty.");
+                    }
                 }
-            } else {
-                toast_manager_.ShowWarning("Git: Branch name cannot be empty.");
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                static char branch_filter[64] = "";
+                ImGui::Text("Switch Branch:");
+                ImGui::SetNextItemWidth(380.0f);
+                ImGui::InputTextWithHint("##filter_branch", "Filter branches...", branch_filter, sizeof(branch_filter));
+
+                std::vector<std::string> branches = git.GetBranchList();
+                std::string filter_str = branch_filter;
+                std::ranges::transform(filter_str, filter_str.begin(), ::tolower);
+
+                ImGui::BeginChild("##branch_list_child", ImVec2(380.0f, 160.0f), true);
+                if (branches.empty()) {
+                    ImGui::TextDisabled("No branches found.");
+                } else {
+                    for (const auto& b : branches) {
+                        std::string b_lower = b;
+                        std::ranges::transform(b_lower, b_lower.begin(), ::tolower);
+                        if (!filter_str.empty() && b_lower.find(filter_str) == std::string::npos) {
+                            continue;
+                        }
+
+                        bool is_current = (b == git.GetBranch());
+                        std::string label = (is_current ? "* " : "  ") + b;
+                        if (ImGui::Selectable(label.c_str(), is_current)) {
+                            if (!is_current) {
+                                std::string err;
+                                if (git.CheckoutBranch(b, err)) {
+                                    tab_bar_.ReloadAllFromDisk();
+                                    ScanProjectFiles();
+                                    toast_manager_.ShowSuccess("Git: Switched to branch '" + b + "'");
+                                    ImGui::CloseCurrentPopup();
+                                } else {
+                                    toast_manager_.ShowError(err);
+                                }
+                            }
+                        }
+                        if (is_current && ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Current active branch");
+                        }
+                    }
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
             }
+
+            // Tab 2: Rename
+            if (ImGui::BeginTabItem("Rename")) {
+                ImGui::Spacing();
+                static int rename_branch_idx = 0;
+                auto branches = git.GetBranchList();
+                if (branches.empty()) {
+                    ImGui::TextDisabled("No branches available to rename.");
+                } else {
+                    if (rename_branch_idx >= (int)branches.size()) rename_branch_idx = 0;
+                    ImGui::Text("Select Branch to Rename:");
+                    ImGui::SetNextItemWidth(380.0f);
+                    if (ImGui::BeginCombo("##rename_combo", branches[rename_branch_idx].c_str())) {
+                        for (int i = 0; i < (int)branches.size(); ++i) {
+                            bool is_sel = (i == rename_branch_idx);
+                            if (ImGui::Selectable(branches[i].c_str(), is_sel)) rename_branch_idx = i;
+                            if (is_sel) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    static char rename_to[64] = "";
+                    ImGui::Text("New Branch Name:");
+                    ImGui::SetNextItemWidth(380.0f);
+                    ImGui::InputTextWithHint("##rename_to_input", "New name...", rename_to, sizeof(rename_to));
+
+                    ImGui::Spacing();
+                    if (ImGui::Button("Rename Branch", ImVec2(160.0f, 0))) {
+                        if (strlen(rename_to) > 0 && rename_branch_idx < (int)branches.size()) {
+                            std::string old_name = branches[rename_branch_idx];
+                            std::string new_name = rename_to;
+                            std::string err;
+                            if (git.RenameBranch(old_name, new_name, err)) {
+                                toast_manager_.ShowSuccess("Git: Renamed branch '" + old_name + "' to '" + new_name + "'");
+                                rename_to[0] = '\0';
+                                ImGui::CloseCurrentPopup();
+                            } else {
+                                toast_manager_.ShowError(err);
+                            }
+                        } else {
+                            toast_manager_.ShowWarning("Please provide a new branch name.");
+                        }
+                    }
+                }
+                ImGui::EndTabItem();
+            }
+
+            // Tab 3: Delete
+            if (ImGui::BeginTabItem("Delete")) {
+                ImGui::Spacing();
+                static int del_branch_idx = 0;
+                static bool force_del = false;
+                auto branches = git.GetBranchList();
+                if (branches.empty()) {
+                    ImGui::TextDisabled("No branches available to delete.");
+                } else {
+                    if (del_branch_idx >= (int)branches.size()) del_branch_idx = 0;
+                    ImGui::Text("Select Branch to Delete:");
+                    ImGui::SetNextItemWidth(380.0f);
+                    if (ImGui::BeginCombo("##del_combo", branches[del_branch_idx].c_str())) {
+                        for (int i = 0; i < (int)branches.size(); ++i) {
+                            bool is_sel = (i == del_branch_idx);
+                            std::string item_label = branches[i];
+                            if (branches[i] == git.GetBranch()) item_label += " (current)";
+                            if (ImGui::Selectable(item_label.c_str(), is_sel)) del_branch_idx = i;
+                            if (is_sel) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    ImGui::Checkbox("Force Delete (-D)", &force_del);
+
+                    ImGui::Spacing();
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+                    if (ImGui::Button("Delete Branch", ImVec2(160.0f, 0))) {
+                        if (del_branch_idx < (int)branches.size()) {
+                            std::string target_branch = branches[del_branch_idx];
+                            if (target_branch == git.GetBranch()) {
+                                toast_manager_.ShowError("Cannot delete active branch. Switch branch first.");
+                            } else {
+                                bool do_force = force_del;
+                                RequestConfirmation("Delete Branch",
+                                    "Are you sure you want to delete branch '" + target_branch + "'?" +
+                                    (do_force ? "\nWarning: Force delete (-D) may discard unmerged commits!" : ""),
+                                    "Delete", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                                    [this, target_branch, do_force]() {
+                                        std::string err;
+                                        if (GitManager::Instance().DeleteBranch(target_branch, do_force, err)) {
+                                            toast_manager_.ShowSuccess("Git: Deleted branch '" + target_branch + "'");
+                                        } else {
+                                            toast_manager_.ShowError(err);
+                                        }
+                                    });
+                                ImGui::CloseCurrentPopup();
+                            }
+                        }
+                    }
+                    ImGui::PopStyleColor();
+                }
+                ImGui::EndTabItem();
+            }
+
+            // Tab 4: Merge
+            if (ImGui::BeginTabItem("Merge")) {
+                ImGui::Spacing();
+                static int merge_branch_idx = 0;
+                auto branches = git.GetBranchList();
+                std::vector<std::string> other_branches;
+                for (const auto& b : branches) {
+                    if (b != git.GetBranch()) other_branches.push_back(b);
+                }
+
+                if (other_branches.empty()) {
+                    ImGui::TextDisabled("No other branches to merge into '%s'.", git.GetBranch().c_str());
+                } else {
+                    if (merge_branch_idx >= (int)other_branches.size()) merge_branch_idx = 0;
+                    ImGui::Text("Select branch to merge INTO current branch '%s':", git.GetBranch().c_str());
+                    ImGui::SetNextItemWidth(380.0f);
+                    if (ImGui::BeginCombo("##merge_combo", other_branches[merge_branch_idx].c_str())) {
+                        for (int i = 0; i < (int)other_branches.size(); ++i) {
+                            bool is_sel = (i == merge_branch_idx);
+                            if (ImGui::Selectable(other_branches[i].c_str(), is_sel)) merge_branch_idx = i;
+                            if (is_sel) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    ImGui::Spacing();
+                    if (ImGui::Button("Merge into Current Branch", ImVec2(220.0f, 0))) {
+                        std::string target_branch = other_branches[merge_branch_idx];
+                        std::string cur_branch = git.GetBranch();
+                        RequestConfirmation("Merge Branch",
+                            "Are you sure you want to merge branch '" + target_branch + "' into '" + cur_branch + "'?",
+                            "Merge", ImVec4(0.2f, 0.55f, 0.85f, 1.0f),
+                            [this, target_branch]() {
+                                std::string err;
+                                if (GitManager::Instance().MergeBranch(target_branch, err)) {
+                                    tab_bar_.ReloadAllFromDisk();
+                                    ScanProjectFiles();
+                                    toast_manager_.ShowSuccess("Git: Merged '" + target_branch + "' successfully.");
+                                } else {
+                                    toast_manager_.ShowError(err);
+                                }
+                            });
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
         }
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        // ── Switch branch list ──────────────────────────────────────────────
-        ImGui::Text("Switch Branch:");
-        ImGui::SetNextItemWidth(360.0f);
-        ImGui::InputTextWithHint("##filter_branch", "Filter branches...", branch_filter, sizeof(branch_filter));
-
-        std::vector<std::string> branches = git.GetBranchList();
-        std::string filter_str = branch_filter;
-        std::ranges::transform(filter_str, filter_str.begin(), ::tolower);
-
-        ImGui::BeginChild("##branch_list_child", ImVec2(360.0f, 150.0f), true);
-        if (branches.empty()) {
-            ImGui::TextDisabled("No branches found.");
-        } else {
-            for (const auto& b : branches) {
-                std::string b_lower = b;
-                std::ranges::transform(b_lower, b_lower.begin(), ::tolower);
-                if (!filter_str.empty() && b_lower.find(filter_str) == std::string::npos) {
-                    continue;
-                }
-
-                bool is_current = (b == git.GetBranch());
-                std::string label = (is_current ? "* " : "  ") + b;
-                if (ImGui::Selectable(label.c_str(), is_current)) {
-                    if (!is_current) {
-                        std::string err;
-                        if (git.CheckoutBranch(b, err)) {
-                            toast_manager_.ShowSuccess("Git: Switched to branch '" + b + "'");
-                            ImGui::CloseCurrentPopup();
-                        } else {
-                            toast_manager_.ShowError(err);
-                        }
-                    }
-                }
-                if (is_current && ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Current active branch");
-                }
-            }
-        }
-        ImGui::EndChild();
-
-        ImGui::Spacing();
         if (ImGui::Button("Close", ImVec2(-1, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
 
+    // ── 3. Git Remotes Modal ────────────────────────────────────────────
     if (show_git_remote_modal_) {
-        ImGui::OpenPopup("Add Remote Repository##modal");
+        ImGui::OpenPopup("Git Remotes##modal");
         show_git_remote_modal_ = false;
     }
-    if (ImGui::BeginPopupModal("Add Remote Repository##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        auto& git = GitManager::Instance();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Git Remotes##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         static char remote_name[64] = "origin";
         static char remote_url[256] = "";
 
-        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "Remote Repository Setup");
-        ImGui::TextWrapped("No remote repository is linked yet. Provide a remote URL (e.g. GitHub/GitLab) to publish and push your commits.");
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Manage Remote Repositories");
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        ImGui::Text("Remote Name:");
-        ImGui::SetNextItemWidth(360.0f);
+        // Add Remote Section
+        ImGui::Text("Add Remote:");
+        ImGui::Text("Name:");
+        ImGui::SetNextItemWidth(380.0f);
         ImGui::InputText("##remote_name_input", remote_name, sizeof(remote_name));
 
-        ImGui::Text("Remote URL:");
-        ImGui::SetNextItemWidth(360.0f);
+        ImGui::Text("URL:");
+        ImGui::SetNextItemWidth(380.0f);
         ImGui::InputTextWithHint("##remote_url_input", "https://github.com/user/repo.git", remote_url, sizeof(remote_url));
 
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        if (ImGui::Button("Add Remote & Push", ImVec2(175.0f, 0))) {
+        if (ImGui::Button("Add Remote", ImVec2(140.0f, 0))) {
             if (strlen(remote_url) > 0) {
                 std::string err;
                 if (git.AddRemote(remote_name, remote_url, err)) {
-                    toast_manager_.ShowSuccess("Git: Added remote '" + std::string(remote_name) + "'. Pushing...");
-                    std::string push_err;
-                    if (git.Push(true, push_err)) {
-                        toast_manager_.ShowSuccess("Git: Successfully pushed to " + std::string(remote_name) + "!");
-                        remote_url[0] = '\0';
-                        ImGui::CloseCurrentPopup();
-                    } else {
-                        toast_manager_.ShowError("Git Push failed: " + push_err);
-                    }
+                    toast_manager_.ShowSuccess("Git: Added remote '" + std::string(remote_name) + "'");
+                    remote_url[0] = '\0';
                 } else {
-                    toast_manager_.ShowError("Failed to add remote: " + err);
+                    toast_manager_.ShowError(err);
                 }
             } else {
                 toast_manager_.ShowWarning("Remote URL cannot be empty.");
             }
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(175.0f, 0))) {
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Configured Remotes
+        ImGui::Text("Configured Remotes:");
+        auto remotes = git.GetRemoteList();
+        if (remotes.empty()) {
+            ImGui::TextDisabled("No remotes configured.");
+        } else {
+            ImGui::BeginChild("##remotes_list_child", ImVec2(380.0f, 120.0f), true);
+            for (const auto& r : remotes) {
+                ImGui::PushID(r.c_str());
+                std::string url = git.GetRemoteUrl(r);
+                ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "%s", r.c_str());
+                if (!url.empty()) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(%s)", url.c_str());
+                }
+                ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 70.0f);
+                if (ImGui::SmallButton("Remove")) {
+                    RequestConfirmation("Remove Remote",
+                        "Are you sure you want to remove remote '" + r + "'?",
+                        "Remove", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                        [this, r]() {
+                            std::string err;
+                            if (GitManager::Instance().RemoveRemote(r, err)) {
+                                toast_manager_.ShowSuccess("Git: Removed remote '" + r + "'");
+                            } else {
+                                toast_manager_.ShowError(err);
+                            }
+                        });
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close", ImVec2(-1, 0))) {
             ImGui::CloseCurrentPopup();
         }
+        ImGui::EndPopup();
+    }
+
+    // ── 4. Git Stash Modal ──────────────────────────────────────────────
+    if (show_git_stash_modal_) {
+        ImGui::OpenPopup("Git Stash##modal");
+        show_git_stash_modal_ = false;
+    }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Git Stash##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Stash Management");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        static char stash_msg[128] = "";
+        static bool stash_untracked = true;
+        static bool stash_keep_index = false;
+
+        ImGui::Text("Save Stash:");
+        ImGui::SetNextItemWidth(420.0f);
+        ImGui::InputTextWithHint("##stash_msg_input", "Optional stash description...", stash_msg, sizeof(stash_msg));
+        ImGui::Checkbox("Include untracked (-u)", &stash_untracked);
+        ImGui::SameLine(220.0f);
+        ImGui::Checkbox("Keep index (keep staged)", &stash_keep_index);
+
+        ImGui::Spacing();
+        if (ImGui::Button("Stash Changes", ImVec2(140.0f, 0))) {
+            std::string err;
+            if (git.StashSave(stash_msg, stash_untracked, stash_keep_index, err)) {
+                tab_bar_.ReloadAllFromDisk();
+                toast_manager_.ShowSuccess("Git: Stashed changes successfully.");
+                stash_msg[0] = '\0';
+            } else {
+                toast_manager_.ShowError(err);
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Existing Stashes:");
+        auto stashes = git.GetStashList();
+        if (stashes.empty()) {
+            ImGui::TextDisabled("No stashes available.");
+        } else {
+            ImGui::BeginChild("##stash_list_child", ImVec2(420.0f, 160.0f), true);
+            for (const auto& s : stashes) {
+                ImGui::PushID(s.name.c_str());
+                ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "%s", s.name.c_str());
+                ImGui::SameLine();
+                ImGui::TextWrapped("%s", s.message.c_str());
+
+                if (ImGui::SmallButton("Apply")) {
+                    std::string err;
+                    if (git.StashApply(s.index, err)) {
+                        tab_bar_.ReloadAllFromDisk();
+                        toast_manager_.ShowSuccess("Git: Applied " + s.name);
+                    } else {
+                        toast_manager_.ShowError(err);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Pop")) {
+                    std::string err;
+                    if (git.StashPop(s.index, err)) {
+                        tab_bar_.ReloadAllFromDisk();
+                        toast_manager_.ShowSuccess("Git: Popped " + s.name);
+                    } else {
+                        toast_manager_.ShowError(err);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Drop")) {
+                    int s_idx = s.index;
+                    std::string s_name = s.name;
+                    RequestConfirmation("Drop Stash",
+                        "Are you sure you want to drop " + s_name + "?\nThis cannot be recovered!",
+                        "Drop", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                        [this, s_idx, s_name]() {
+                            std::string err;
+                            if (GitManager::Instance().StashDrop(s_idx, err)) {
+                                toast_manager_.ShowSuccess("Git: Dropped " + s_name);
+                            } else {
+                                toast_manager_.ShowError(err);
+                            }
+                        });
+                }
+
+                ImGui::Separator();
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close", ImVec2(-1, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ── 5. Git Tags Modal ───────────────────────────────────────────────
+    if (show_git_tags_modal_) {
+        ImGui::OpenPopup("Git Tags##modal");
+        show_git_tags_modal_ = false;
+    }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Git Tags##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Git Tags");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        static char tag_name[64] = "";
+        static char tag_msg[128] = "";
+
+        ImGui::Text("Create Tag:");
+        ImGui::SetNextItemWidth(380.0f);
+        ImGui::InputTextWithHint("##tag_name_input", "Tag name (e.g. v1.0.0)...", tag_name, sizeof(tag_name));
+
+        ImGui::Text("Message (optional):");
+        ImGui::SetNextItemWidth(380.0f);
+        ImGui::InputTextWithHint("##tag_msg_input", "Tag annotation message...", tag_msg, sizeof(tag_msg));
+
+        ImGui::Spacing();
+        if (ImGui::Button("Create Tag", ImVec2(140.0f, 0))) {
+            if (strlen(tag_name) > 0) {
+                std::string err;
+                if (git.CreateTag(tag_name, tag_msg, err)) {
+                    toast_manager_.ShowSuccess("Git: Created tag '" + std::string(tag_name) + "'");
+                    tag_name[0] = '\0';
+                    tag_msg[0] = '\0';
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            } else {
+                toast_manager_.ShowWarning("Tag name cannot be empty.");
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Existing Tags:");
+        auto tags = git.GetTagList();
+        if (tags.empty()) {
+            ImGui::TextDisabled("No tags found.");
+        } else {
+            ImGui::BeginChild("##tags_list_child", ImVec2(380.0f, 140.0f), true);
+            for (const auto& tg : tags) {
+                ImGui::PushID(tg.c_str());
+                ImGui::Text("%s", tg.c_str());
+                ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 65.0f);
+                if (ImGui::SmallButton("Delete")) {
+                    RequestConfirmation("Delete Tag",
+                        "Are you sure you want to delete tag '" + tg + "'?",
+                        "Delete", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                        [this, tg]() {
+                            std::string err;
+                            if (GitManager::Instance().DeleteTag(tg, err)) {
+                                toast_manager_.ShowSuccess("Git: Deleted tag '" + tg + "'");
+                            } else {
+                                toast_manager_.ShowError(err);
+                            }
+                        });
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+
+            ImGui::Spacing();
+            if (ImGui::Button("Push All Tags to Remote", ImVec2(200.0f, 0))) {
+                std::string err;
+                if (git.PushTags(err)) {
+                    toast_manager_.ShowSuccess("Git: Pushed all tags.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close", ImVec2(-1, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ── 6. Git Clone Modal ──────────────────────────────────────────────
+    if (show_git_clone_modal_) {
+        ImGui::OpenPopup("Clone Repository##modal");
+        show_git_clone_modal_ = false;
+    }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Clone Repository##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        static char clone_url[256] = "";
+        static char clone_target[256] = "";
+
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Clone Remote Repository");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Repository URL:");
+        ImGui::SetNextItemWidth(450.0f);
+        ImGui::InputTextWithHint("##clone_url", "https://github.com/user/repository.git", clone_url, sizeof(clone_url));
+
+        ImGui::Text("Target Directory:");
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::InputTextWithHint("##clone_target", "C:/path/to/destination", clone_target, sizeof(clone_target));
+        ImGui::SameLine();
+        if (ImGui::Button("Browse...##clone_browse")) {
+            std::string folder = platform::OpenFolderDialog();
+            if (!folder.empty()) {
+                strncpy_s(clone_target, folder.c_str(), sizeof(clone_target) - 1);
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float clone_avail_w = ImGui::GetContentRegionAvail().x;
+        float clone_btn_w = (clone_avail_w - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ImGui::Button("Clone", ImVec2(clone_btn_w, 0))) {
+            if (strlen(clone_url) > 0 && strlen(clone_target) > 0) {
+                std::string err;
+                toast_manager_.ShowInfo("Git: Cloning repository in progress...");
+                if (GitManager::CloneRepo(clone_url, clone_target, err)) {
+                    file_explorer_.SetRoot(clone_target);
+                    terminal_.SetWorkingDirectory(clone_target);
+                    ScanProjectFiles();
+                    git.SetRepoPath(clone_target);
+                    SaveSession();
+                    toast_manager_.ShowSuccess("Git: Cloned and opened workspace successfully!");
+                    clone_url[0] = '\0';
+                    clone_target[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            } else {
+                toast_manager_.ShowWarning("Please provide both URL and target directory.");
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(clone_btn_w, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ── 7. Git Output Log Modal ─────────────────────────────────────────
+    if (show_git_output_modal_) {
+        ImGui::OpenPopup("Git Output##modal");
+        show_git_output_modal_ = false;
+    }
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(650.0f * ui_scale_, 450.0f * ui_scale_), ImGuiCond_FirstUseEver);
+    if (ImGui::BeginPopupModal("Git Output##modal", nullptr)) {
+        auto logs = git.GetCommandLog();
+
+        if (ImGui::Button("Copy All")) {
+            std::string full_log;
+            for (const auto& l : logs) {
+                full_log += "[" + l.timestamp + "] " + l.command + " (exit: " + std::to_string(l.exit_code) + ")\n";
+                if (!l.output.empty()) full_log += l.output + "\n";
+            }
+            ImGui::SetClipboardText(full_log.c_str());
+            toast_manager_.ShowInfo("Git Output copied to clipboard.");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Output")) {
+            git.ClearCommandLog();
+        }
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 70.0f);
+        if (ImGui::Button("Close", ImVec2(60.0f, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::Separator();
+
+        ImGui::BeginChild("##git_output_scroll", ImVec2(0, 0), true);
+        if (logs.empty()) {
+            ImGui::TextDisabled("No Git commands recorded yet.");
+        } else {
+            for (const auto& l : logs) {
+                ImGui::TextDisabled("[%s]", l.timestamp.c_str());
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "%s", l.command.c_str());
+                ImGui::SameLine();
+                if (l.exit_code == 0) {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "[ok]");
+                } else {
+                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "[exit %d]", l.exit_code);
+                }
+
+                if (!l.output.empty()) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+                    ImGui::Indent(16.0f);
+                    ImGui::TextWrapped("%s", l.output.c_str());
+                    ImGui::Unindent(16.0f);
+                    ImGui::PopStyleColor();
+                }
+                ImGui::Spacing();
+            }
+        }
+        ImGui::EndChild();
         ImGui::EndPopup();
     }
 }
@@ -853,18 +1413,25 @@ void App::RenderSourceControl() {
         ImGui::Spacing();
         if (ImGui::Button("Initialize Repository")) {
             platform::RunCommand("git init", file_explorer_.Root());
-            git.Refresh();
+            git.RefreshAsync();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clone Repository...")) {
+            show_git_clone_modal_ = true;
         }
         return;
     }
 
-    // Branch selector combo and new branch button
+    // Branch selector combo and action buttons
     float icon_sz = 14.0f * ui_scale_;
     float refresh_btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float more_btn_w = 22.0f * ui_scale_;
+    float total_right_w = refresh_btn_w + more_btn_w + ImGui::GetStyle().ItemSpacing.x;
+
     float branch_text_w = ImGui::CalcTextSize(git.GetBranch().c_str()).x;
     float arrow_w = ImGui::GetFrameHeight();
     float combo_w = branch_text_w + arrow_w + ImGui::GetStyle().FramePadding.x * 2.0f + 6.0f;
-    float max_combo_w = ImGui::GetContentRegionAvail().x - refresh_btn_w - ImGui::GetFrameHeight() - 24.0f;
+    float max_combo_w = ImGui::GetContentRegionAvail().x - total_right_w - ImGui::GetFrameHeight() - 24.0f;
     if (combo_w > max_combo_w) combo_w = max_combo_w;
 
     ImGui::SetNextItemWidth(combo_w);
@@ -879,6 +1446,8 @@ void App::RenderSourceControl() {
                 if (!is_selected) {
                     std::string err;
                     if (git.CheckoutBranch(b, err)) {
+                        tab_bar_.ReloadAllFromDisk();
+                        ScanProjectFiles();
                         toast_manager_.ShowSuccess("Git: Switched to branch '" + b + "'");
                     } else {
                         toast_manager_.ShowError(err);
@@ -899,7 +1468,7 @@ void App::RenderSourceControl() {
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Create New Branch...");
 
-    float right_x = ImGui::GetWindowContentRegionMax().x - refresh_btn_w - 4.0f;
+    float right_x = ImGui::GetWindowContentRegionMax().x - total_right_w - 4.0f;
     if (right_x > ImGui::GetCursorPosX()) {
         ImGui::SameLine(right_x);
     } else {
@@ -913,15 +1482,274 @@ void App::RenderSourceControl() {
     ImTextureID refresh_icon = IconManager::Instance().GetIconByName("refresh");
     if (refresh_icon) {
         if (ImGui::ImageButton("##git_refresh", refresh_icon, ImVec2(icon_sz, icon_sz))) {
-            git.Refresh();
+            git.RefreshAsync();
         }
     } else {
         if (ImGui::SmallButton("↻##git_refresh")) {
-            git.Refresh();
+            git.RefreshAsync();
         }
     }
-    ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Refresh Git Status");
+
+    ImGui::SameLine();
+    if (ImGui::SmallButton("···##git_more_actions")) {
+        ImGui::OpenPopup("##git_more_actions_popup");
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("More Actions...");
+
+    ImGui::PopStyleColor(3);
+
+    // ── More Actions (...) Menu ─────────────────────────────────────────
+    if (ImGui::BeginPopup("##git_more_actions_popup")) {
+        if (ImGui::MenuItem("View as Tree", nullptr, git_view_as_tree_)) {
+            git_view_as_tree_ = !git_view_as_tree_;
+        }
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Pull")) {
+            std::string err;
+            if (git.Pull(err)) {
+                tab_bar_.ReloadAllFromDisk();
+                ScanProjectFiles();
+                toast_manager_.ShowSuccess("Git: Pull completed.");
+            } else {
+                toast_manager_.ShowError("Git Pull failed: " + err);
+            }
+        }
+        if (ImGui::MenuItem("Push")) {
+            if (!git.HasRemote("origin")) {
+                show_git_remote_modal_ = true;
+            } else {
+                std::string err;
+                if (git.Push(false, err)) {
+                    toast_manager_.ShowSuccess("Git: Changes pushed successfully.");
+                } else {
+                    toast_manager_.ShowError("Git Push failed: " + err);
+                }
+            }
+        }
+        if (ImGui::MenuItem("Clone...")) {
+            show_git_clone_modal_ = true;
+        }
+        if (ImGui::MenuItem("Checkout to...")) {
+            show_git_branch_modal_ = true;
+        }
+        if (ImGui::MenuItem("Fetch")) {
+            std::string err;
+            if (git.Fetch(err)) {
+                toast_manager_.ShowSuccess("Git: Fetch completed.");
+            } else {
+                toast_manager_.ShowError("Git Fetch failed: " + err);
+            }
+        }
+        ImGui::Separator();
+
+        if (ImGui::BeginMenu("Commit")) {
+            if (ImGui::MenuItem("Commit Staged (Amend)")) {
+                RequestConfirmation("Commit (Amend)",
+                    "Are you sure you want to amend the previous commit?\nThis will modify the last commit with current staged changes.",
+                    "Amend Commit", ImVec4(0.2f, 0.55f, 0.85f, 1.0f),
+                    [this]() {
+                        std::string err;
+                        if (GitManager::Instance().CommitAmend("", err)) {
+                            tab_bar_.ReloadAllFromDisk();
+                            toast_manager_.ShowSuccess("Git: Commit amended successfully.");
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    });
+            }
+            if (ImGui::MenuItem("Undo Last Commit (Soft)")) {
+                RequestConfirmation("Undo Last Commit",
+                    "Are you sure you want to undo the last commit?\nChanges will be preserved in your working tree.",
+                    "Undo Commit", ImVec4(0.85f, 0.4f, 0.1f, 1.0f),
+                    [this]() {
+                        std::string err;
+                        if (GitManager::Instance().UndoLastCommit(true, err)) {
+                            tab_bar_.ReloadAllFromDisk();
+                            toast_manager_.ShowSuccess("Git: Undid last commit (kept staged).");
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    });
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Changes")) {
+            if (ImGui::MenuItem("Stage All Changes")) {
+                git.StageAll();
+                toast_manager_.ShowSuccess("Git: Staged all changes.");
+            }
+            if (ImGui::MenuItem("Unstage All Changes")) {
+                git.UnstageAll();
+                toast_manager_.ShowInfo("Git: Unstaged all changes.");
+            }
+            if (ImGui::MenuItem("Discard All Changes")) {
+                RequestConfirmation("Discard All Changes",
+                    "Are you sure you want to discard ALL unstaged changes?\nThis action CANNOT be undone.",
+                    "Discard All", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                    [this]() {
+                        std::string err;
+                        if (GitManager::Instance().DiscardAll(err)) {
+                            tab_bar_.ReloadAllFromDisk();
+                            toast_manager_.ShowInfo("Git: Discarded all changes.");
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    });
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Pull, Push")) {
+            if (ImGui::MenuItem("Pull")) {
+                std::string err;
+                if (git.Pull(err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    ScanProjectFiles();
+                    toast_manager_.ShowSuccess("Git: Pull completed.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("Push")) {
+                std::string err;
+                if (git.Push(false, err)) {
+                    toast_manager_.ShowSuccess("Git: Push completed.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("Push (Force)")) {
+                RequestConfirmation("Force Push",
+                    "WARNING: Force pushing will overwrite remote branch history!\nAre you sure you want to proceed?",
+                    "Force Push", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                    [this]() {
+                        std::string err;
+                        if (GitManager::Instance().PushForce(err)) {
+                            toast_manager_.ShowSuccess("Git: Force push completed.");
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    });
+            }
+            if (ImGui::MenuItem("Push (Tags)")) {
+                std::string err;
+                if (git.PushTags(err)) {
+                    toast_manager_.ShowSuccess("Git: Pushed tags.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Branch")) {
+            if (ImGui::MenuItem("Switch Branch...")) {
+                show_git_branch_modal_ = true;
+            }
+            if (ImGui::MenuItem("Create Branch...")) {
+                show_git_branch_modal_ = true;
+            }
+            if (ImGui::MenuItem("Rename Branch...")) {
+                show_git_branch_modal_ = true;
+            }
+            if (ImGui::MenuItem("Delete Branch...")) {
+                show_git_branch_modal_ = true;
+            }
+            if (ImGui::MenuItem("Merge Branch...")) {
+                show_git_branch_modal_ = true;
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Remote")) {
+            if (ImGui::MenuItem("Add Remote...")) {
+                show_git_remote_modal_ = true;
+            }
+            if (ImGui::MenuItem("Manage Remotes...")) {
+                show_git_remote_modal_ = true;
+            }
+            if (ImGui::MenuItem("Fetch (Prune)")) {
+                std::string err;
+                if (git.FetchPrune(err)) {
+                    toast_manager_.ShowSuccess("Git: Fetched and pruned remotes.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Stash")) {
+            if (ImGui::MenuItem("Stash (Include Untracked)")) {
+                std::string err;
+                if (git.StashSave("", true, false, err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    toast_manager_.ShowSuccess("Git: Stashed changes (including untracked).");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("Stash (Keep Staged)")) {
+                std::string err;
+                if (git.StashSave("", true, true, err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    toast_manager_.ShowSuccess("Git: Stashed changes (kept staged).");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("Pop Latest Stash")) {
+                std::string err;
+                if (git.StashPop(0, err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    toast_manager_.ShowSuccess("Git: Popped latest stash.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("Apply Latest Stash")) {
+                std::string err;
+                if (git.StashApply(0, err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    toast_manager_.ShowSuccess("Git: Applied latest stash.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            if (ImGui::MenuItem("View / Manage Stashes...")) {
+                show_git_stash_modal_ = true;
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Tags")) {
+            if (ImGui::MenuItem("Create Tag...")) {
+                show_git_tags_modal_ = true;
+            }
+            if (ImGui::MenuItem("Manage Tags...")) {
+                show_git_tags_modal_ = true;
+            }
+            if (ImGui::MenuItem("Push Tags")) {
+                std::string err;
+                if (git.PushTags(err)) {
+                    toast_manager_.ShowSuccess("Git: Tags pushed.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        ImGui::Separator();
+        if (ImGui::MenuItem("Show Git Output")) {
+            show_git_output_modal_ = true;
+        }
+
+        ImGui::EndPopup();
+    }
 
     ImGui::Spacing();
 
@@ -961,6 +1789,8 @@ void App::RenderSourceControl() {
         } else {
             std::string err;
             if (git.Pull(err)) {
+                tab_bar_.ReloadAllFromDisk();
+                ScanProjectFiles();
                 toast_manager_.ShowSuccess("Git: Pull completed successfully.");
             } else {
                 toast_manager_.ShowError("Git Pull failed: " + err);
@@ -975,6 +1805,10 @@ void App::RenderSourceControl() {
     ImGui::Separator();
     ImGui::Spacing();
 
+    // Staged list for commit button state & section
+    const auto staged = git.GetStagedChanges();
+    bool has_staged = !staged.empty();
+
     // Commit message input
     static char commit_msg[256] = "";
     ImGui::SetNextItemWidth(-1);
@@ -986,16 +1820,27 @@ void App::RenderSourceControl() {
     }
 
     ImGui::Spacing();
-    if (ImGui::Button("Commit", ImVec2(-1, 0)) || trigger_commit) {
+    if (!has_staged) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Commit", ImVec2(-1, 0)) || (has_staged && trigger_commit)) {
         if (strlen(commit_msg) > 0) {
-            if (git.Commit(commit_msg)) {
+            std::string err;
+            if (git.Commit(commit_msg, err)) {
                 commit_msg[0] = '\0';
+                tab_bar_.ReloadAllFromDisk();
                 toast_manager_.ShowSuccess("Git: Changes committed successfully.");
             } else {
-                toast_manager_.ShowError("Git: Commit failed. Stage changes first.");
+                toast_manager_.ShowError(err.empty() ? "Git: Commit failed." : err);
             }
         } else {
             toast_manager_.ShowWarning("Git: Please enter a commit message.");
+        }
+    }
+    if (!has_staged) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("No staged changes to commit.\nStage files first using '+' next to a file or 'Stage All Changes'.");
         }
     }
 
@@ -1004,18 +1849,20 @@ void App::RenderSourceControl() {
     ImGui::Spacing();
 
     // ── Staged Changes ──────────────────────────────────────────────────
-    const auto& staged = git.GetStagedChanges();
     if (!staged.empty()) {
         std::string staged_header = "STAGED CHANGES (" + std::to_string(staged.size()) + ")";
-        if (ImGui::CollapsingHeader(staged_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            float action_w = 20.0f;
-            float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
-            if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
-            if (ImGui::SmallButton("-##unstage_all")) {
-                git.UnstageAll();
-            }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unstage All Changes");
+        ImGui::SetNextItemAllowOverlap();
+        bool staged_open = ImGui::CollapsingHeader(staged_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
 
+        float action_w = 20.0f;
+        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
+        if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
+        if (ImGui::SmallButton("-##unstage_all")) {
+            git.UnstageAll();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unstage All Changes");
+
+        if (staged_open) {
             for (const auto& item : staged) {
                 ImGui::PushID(item.path.c_str());
                 
@@ -1027,15 +1874,28 @@ void App::RenderSourceControl() {
 
                 ImGui::TextColored(col, "%c", code);
                 ImGui::SameLine();
-                if (ImGui::Selectable(item.path.c_str(), false, ImGuiSelectableFlags_AllowOverlap)) {
+
+                float item_btn_w = 22.0f;
+                float item_right = ImGui::GetWindowContentRegionMax().x - item_btn_w - 4.0f;
+                float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
+                if (sel_w < 10.0f) sel_w = 10.0f;
+
+                std::string display_name = item.path;
+                if (git_view_as_tree_) {
+                    auto slash = item.path.find_last_of("/\\");
+                    if (slash != std::string::npos) {
+                        display_name = item.path.substr(slash + 1) + " (" + item.path.substr(0, slash) + ")";
+                    }
+                }
+
+                if (ImGui::Selectable(display_name.c_str(), false, 0, ImVec2(sel_w, 0))) {
                     std::string full_path = git.GetRepoPath() + "/" + item.path;
                     tab_bar_.OpenFile(full_path, &theme_manager_.Active());
                 }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
 
-                float item_btn_w = 20.0f;
-                float item_right = ImGui::GetWindowContentRegionMax().x - item_btn_w - 4.0f;
-                if (item_right > ImGui::GetCursorPosX()) ImGui::SameLine(item_right);
-                if (ImGui::SmallButton("-")) {
+                ImGui::SameLine(item_right);
+                if (ImGui::SmallButton("-##unstage_one")) {
                     git.UnstageFile(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unstage");
@@ -1046,19 +1906,21 @@ void App::RenderSourceControl() {
     }
 
     // ── Changes (Working Tree) ──────────────────────────────────────────
-    const auto& changes = git.GetUnstagedChanges();
+    const auto changes = git.GetUnstagedChanges();
     std::string changes_header = "CHANGES (" + std::to_string(changes.size()) + ")";
-    if (ImGui::CollapsingHeader(changes_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (!changes.empty()) {
-            float action_w = 20.0f;
-            float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
-            if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
-            if (ImGui::SmallButton("+##stage_all")) {
-                git.StageAll();
-            }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stage All Changes");
+    ImGui::SetNextItemAllowOverlap();
+    bool changes_open = ImGui::CollapsingHeader(changes_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+    if (!changes.empty()) {
+        float action_w = 20.0f;
+        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
+        if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
+        if (ImGui::SmallButton("+##stage_all")) {
+            git.StageAll();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stage All Changes");
+    }
 
+    if (changes_open) {
         if (changes.empty()) {
             ImGui::TextDisabled("No changes detected in working tree.");
         } else {
@@ -1073,22 +1935,41 @@ void App::RenderSourceControl() {
 
                 ImGui::TextColored(col, "%c", code);
                 ImGui::SameLine();
-                if (ImGui::Selectable(item.path.c_str(), false, ImGuiSelectableFlags_AllowOverlap)) {
-                    std::string full_path = git.GetRepoPath() + "/" + item.path;
-                    tab_bar_.OpenFile(full_path, &theme_manager_.Active());
-                }
 
                 float item_btns_w = 46.0f;
                 float item_right = ImGui::GetWindowContentRegionMax().x - item_btns_w - 4.0f;
-                if (item_right > ImGui::GetCursorPosX()) ImGui::SameLine(item_right);
-                if (ImGui::SmallButton("+")) {
+                float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
+                if (sel_w < 10.0f) sel_w = 10.0f;
+
+                std::string display_name = item.path;
+                if (git_view_as_tree_) {
+                    auto slash = item.path.find_last_of("/\\");
+                    if (slash != std::string::npos) {
+                        display_name = item.path.substr(slash + 1) + " (" + item.path.substr(0, slash) + ")";
+                    }
+                }
+
+                if (ImGui::Selectable(display_name.c_str(), false, 0, ImVec2(sel_w, 0))) {
+                    std::string full_path = git.GetRepoPath() + "/" + item.path;
+                    tab_bar_.OpenFile(full_path, &theme_manager_.Active());
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
+
+                ImGui::SameLine(item_right);
+                if (ImGui::SmallButton("+##stage_one")) {
                     git.StageFile(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stage");
 
                 ImGui::SameLine();
-                if (ImGui::SmallButton("↺")) {
-                    git.DiscardChanges(item.path);
+                if (ImGui::SmallButton("↺##discard_one")) {
+                    std::string file_path = item.path;
+                    RequestConfirmation("Discard File Changes",
+                        "Are you sure you want to discard changes in:\n" + file_path + "\n\nThis action CANNOT be undone.",
+                        "Discard", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                        [file_path]() {
+                            GitManager::Instance().DiscardChanges(file_path);
+                        });
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Discard Changes");
 
@@ -1204,6 +2085,7 @@ void App::RegisterCommands() {
             file_explorer_.SetRoot(folder);
             terminal_.SetWorkingDirectory(folder);
             ScanProjectFiles();
+            GitManager::Instance().SetRepoPath(folder);
         }
     }});
     command_palette_.RegisterCommand({"view.toggle_terminal", "Toggle Terminal", "Ctrl+`", [this]() {
@@ -1218,11 +2100,11 @@ void App::RegisterCommands() {
         if (show_source_control_) {
             show_file_explorer_ = false;
             show_plugins_ = false;
-            GitManager::Instance().Refresh();
+            GitManager::Instance().RefreshAsync();
         }
     }});
     command_palette_.RegisterCommand({"git.refresh", "Git: Refresh Status", "", [this]() {
-        GitManager::Instance().Refresh();
+        GitManager::Instance().RefreshAsync();
         toast_manager_.ShowInfo("Git: Status refreshed.");
     }});
     command_palette_.RegisterCommand({"git.branch.switch", "Git: Switch / Checkout Branch...", "", [this]() {
@@ -1269,6 +2151,69 @@ void App::RegisterCommands() {
         if (GitManager::Instance().UnstageAll()) {
             toast_manager_.ShowInfo("Git: Unstaged all changes.");
         }
+    }});
+    command_palette_.RegisterCommand({"git.discard_all", "Git: Discard All Changes", "", [this]() {
+        RequestConfirmation("Discard All Changes",
+            "Are you sure you want to discard ALL unstaged changes?\nThis action CANNOT be undone.",
+            "Discard All", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+            [this]() {
+                std::string err;
+                if (GitManager::Instance().DiscardAll(err)) {
+                    tab_bar_.ReloadAllFromDisk();
+                    toast_manager_.ShowInfo("Git: Discarded all changes.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            });
+    }});
+    command_palette_.RegisterCommand({"git.push_force", "Git: Push (Force)", "", [this]() {
+        RequestConfirmation("Force Push",
+            "WARNING: Force pushing will overwrite remote branch history!\nAre you sure you want to proceed?",
+            "Force Push", ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+            [this]() {
+                std::string err;
+                if (GitManager::Instance().PushForce(err)) {
+                    toast_manager_.ShowSuccess("Git: Force push completed.");
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            });
+    }});
+    command_palette_.RegisterCommand({"git.clone", "Git: Clone Repository...", "", [this]() {
+        show_git_clone_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.branch.manage", "Git: Manage Branches...", "", [this]() {
+        show_git_branch_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.remote.manage", "Git: Manage Remotes...", "", [this]() {
+        show_git_remote_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.stash.save", "Git: Stash (Include Untracked)", "", [this]() {
+        std::string err;
+        if (GitManager::Instance().StashSave("", true, false, err)) {
+            tab_bar_.ReloadAllFromDisk();
+            toast_manager_.ShowSuccess("Git: Stashed changes.");
+        } else {
+            toast_manager_.ShowError(err);
+        }
+    }});
+    command_palette_.RegisterCommand({"git.stash.pop", "Git: Pop Latest Stash", "", [this]() {
+        std::string err;
+        if (GitManager::Instance().StashPop(0, err)) {
+            tab_bar_.ReloadAllFromDisk();
+            toast_manager_.ShowSuccess("Git: Popped latest stash.");
+        } else {
+            toast_manager_.ShowError(err);
+        }
+    }});
+    command_palette_.RegisterCommand({"git.stash.manage", "Git: Manage Stashes...", "", [this]() {
+        show_git_stash_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.tag.manage", "Git: Manage Tags...", "", [this]() {
+        show_git_tags_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.output", "Git: Show Git Output Log", "", [this]() {
+        show_git_output_modal_ = true;
     }});
     command_palette_.RegisterCommand({"tools.check_diagnostics", "Diagnostics: Check Active File", "Ctrl+Shift+B", [this]() {
         if (auto* tab = tab_bar_.ActiveTab()) {
@@ -1456,10 +2401,18 @@ void App::OnFileDrop(const std::string& path) {
         file_explorer_.SetRoot(path);
         terminal_.SetWorkingDirectory(path);
         ScanProjectFiles();
+        GitManager::Instance().SetRepoPath(path);
         SaveSession();
     } else {
         tab_bar_.OpenFile(path, &theme_manager_.Active());
         SaveSession();
+    }
+}
+
+void App::OnFocusGained() {
+    tab_bar_.ReloadAllFromDisk();
+    if (GitManager::Instance().HasRepo()) {
+        GitManager::Instance().RefreshAsync();
     }
 }
 
