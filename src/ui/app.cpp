@@ -861,10 +861,11 @@ void App::RenderSourceControl() {
     // Branch selector combo and new branch button
     float icon_sz = 14.0f * ui_scale_;
     float refresh_btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
-    float plus_btn_w = ImGui::GetFrameHeight();
-    float total_reserved = refresh_btn_w + plus_btn_w + ImGui::GetStyle().ItemSpacing.x * 2.0f + 8.0f;
-    float combo_w = ImGui::GetContentRegionAvail().x - total_reserved;
-    if (combo_w < 120.0f) combo_w = 120.0f;
+    float branch_text_w = ImGui::CalcTextSize(git.GetBranch().c_str()).x;
+    float arrow_w = ImGui::GetFrameHeight();
+    float combo_w = branch_text_w + arrow_w + ImGui::GetStyle().FramePadding.x * 2.0f + 6.0f;
+    float max_combo_w = ImGui::GetContentRegionAvail().x - refresh_btn_w - ImGui::GetFrameHeight() - 24.0f;
+    if (combo_w > max_combo_w) combo_w = max_combo_w;
 
     ImGui::SetNextItemWidth(combo_w);
     if (ImGui::BeginCombo("##git_branch_combo", git.GetBranch().c_str())) {
