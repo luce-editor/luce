@@ -55,12 +55,30 @@ public:
     bool DiscardChanges(const std::string& rel_path);
     bool Commit(const std::string& message);
 
+    /// Branch management
+    std::vector<std::string> GetBranchList();
+    bool CheckoutBranch(const std::string& branch_name, std::string& out_error);
+    bool CreateBranch(const std::string& branch_name, bool checkout, std::string& out_error);
+
+    /// Remote & Sync
+    bool HasRemote(const std::string& remote_name = "origin");
+    std::string GetRemoteUrl(const std::string& remote_name = "origin");
+    bool AddRemote(const std::string& remote_name, const std::string& url, std::string& out_error);
+    bool Push(bool set_upstream, std::string& out_error);
+    bool Pull(std::string& out_error);
+    bool Fetch(std::string& out_error);
+
+    int GetAheadCount() const { return ahead_count_; }
+    int GetBehindCount() const { return behind_count_; }
+
 private:
     GitManager() = default;
 
     std::string repo_path_;
     bool has_repo_ = false;
     std::string branch_;
+    int ahead_count_ = 0;
+    int behind_count_ = 0;
     std::vector<GitFileStatus> staged_changes_;
     std::vector<GitFileStatus> unstaged_changes_;
     std::unordered_map<std::string, char> file_status_map_;

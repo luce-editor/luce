@@ -703,6 +703,145 @@ void App::RenderMenuBar() {
         }
         ImGui::EndPopup();
     }
+
+    if (show_git_branch_modal_) {
+        ImGui::OpenPopup("Git Branches##modal");
+        show_git_branch_modal_ = false;
+    }
+    if (ImGui::BeginPopupModal("Git Branches##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto& git = GitManager::Instance();
+        static char branch_filter[64] = "";
+        static char new_branch_name[64] = "";
+
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Current Branch: %s", git.GetBranch().c_str());
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // ── Create new branch ───────────────────────────────────────────────
+        ImGui::Text("Create New Branch:");
+        ImGui::SetNextItemWidth(240.0f);
+        ImGui::InputTextWithHint("##new_branch_input", "New branch name...", new_branch_name, sizeof(new_branch_name));
+        ImGui::SameLine();
+        if (ImGui::Button("Create & Switch")) {
+            if (strlen(new_branch_name) > 0) {
+                std::string err;
+                if (git.CreateBranch(new_branch_name, true, err)) {
+                    toast_manager_.ShowSuccess("Git: Created and checked out branch '" + std::string(new_branch_name) + "'");
+                    new_branch_name[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                } else {
+                    toast_manager_.ShowError(err);
+                }
+            } else {
+                toast_manager_.ShowWarning("Git: Branch name cannot be empty.");
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // ── Switch branch list ──────────────────────────────────────────────
+        ImGui::Text("Switch Branch:");
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::InputTextWithHint("##filter_branch", "Filter branches...", branch_filter, sizeof(branch_filter));
+
+        std::vector<std::string> branches = git.GetBranchList();
+        std::string filter_str = branch_filter;
+        std::ranges::transform(filter_str, filter_str.begin(), ::tolower);
+
+        ImGui::BeginChild("##branch_list_child", ImVec2(360.0f, 150.0f), true);
+        if (branches.empty()) {
+            ImGui::TextDisabled("No branches found.");
+        } else {
+            for (const auto& b : branches) {
+                std::string b_lower = b;
+                std::ranges::transform(b_lower, b_lower.begin(), ::tolower);
+                if (!filter_str.empty() && b_lower.find(filter_str) == std::string::npos) {
+                    continue;
+                }
+
+                bool is_current = (b == git.GetBranch());
+                std::string label = (is_current ? "* " : "  ") + b;
+                if (ImGui::Selectable(label.c_str(), is_current)) {
+                    if (!is_current) {
+                        std::string err;
+                        if (git.CheckoutBranch(b, err)) {
+                            toast_manager_.ShowSuccess("Git: Switched to branch '" + b + "'");
+                            ImGui::CloseCurrentPopup();
+                        } else {
+                            toast_manager_.ShowError(err);
+                        }
+                    }
+                }
+                if (is_current && ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Current active branch");
+                }
+            }
+        }
+        ImGui::EndChild();
+
+        ImGui::Spacing();
+        if (ImGui::Button("Close", ImVec2(-1, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (show_git_remote_modal_) {
+        ImGui::OpenPopup("Add Remote Repository##modal");
+        show_git_remote_modal_ = false;
+    }
+    if (ImGui::BeginPopupModal("Add Remote Repository##modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto& git = GitManager::Instance();
+        static char remote_name[64] = "origin";
+        static char remote_url[256] = "";
+
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "Remote Repository Setup");
+        ImGui::TextWrapped("No remote repository is linked yet. Provide a remote URL (e.g. GitHub/GitLab) to publish and push your commits.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Remote Name:");
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::InputText("##remote_name_input", remote_name, sizeof(remote_name));
+
+        ImGui::Text("Remote URL:");
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::InputTextWithHint("##remote_url_input", "https://github.com/user/repo.git", remote_url, sizeof(remote_url));
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Add Remote & Push", ImVec2(175.0f, 0))) {
+            if (strlen(remote_url) > 0) {
+                std::string err;
+                if (git.AddRemote(remote_name, remote_url, err)) {
+                    toast_manager_.ShowSuccess("Git: Added remote '" + std::string(remote_name) + "'. Pushing...");
+                    std::string push_err;
+                    if (git.Push(true, push_err)) {
+                        toast_manager_.ShowSuccess("Git: Successfully pushed to " + std::string(remote_name) + "!");
+                        remote_url[0] = '\0';
+                        ImGui::CloseCurrentPopup();
+                    } else {
+                        toast_manager_.ShowError("Git Push failed: " + push_err);
+                    }
+                } else {
+                    toast_manager_.ShowError("Failed to add remote: " + err);
+                }
+            } else {
+                toast_manager_.ShowWarning("Remote URL cannot be empty.");
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(175.0f, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void App::RenderSourceControl() {
@@ -719,9 +858,19 @@ void App::RenderSourceControl() {
         return;
     }
 
-    // Branch info and refresh button
+    // Branch selector and new branch button
     ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Branch: %s", git.GetBranch().c_str());
+    std::string branch_display = " " + git.GetBranch() + " v ";
+    if (ImGui::Button(branch_display.c_str())) {
+        show_git_branch_modal_ = true;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Switch Branch (click to view branches)");
+
+    ImGui::SameLine();
+    if (ImGui::Button("+##git_new_branch")) {
+        show_git_branch_modal_ = true;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Create New Branch...");
 
     float icon_sz = 14.0f * ui_scale_;
     float btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
@@ -748,6 +897,54 @@ void App::RenderSourceControl() {
     }
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Refresh Git Status");
+
+    ImGui::Spacing();
+
+    // ── Sync Actions (Push & Pull) ──────────────────────────────────────
+    int ahead = git.GetAheadCount();
+    int behind = git.GetBehindCount();
+    std::string push_btn_label = ahead > 0 ? ("Push (^ " + std::to_string(ahead) + ")") : "Push";
+    std::string pull_btn_label = behind > 0 ? ("Pull (v " + std::to_string(behind) + ")") : "Pull";
+
+    float avail_sync_w = ImGui::GetContentRegionAvail().x;
+    float sync_btn_w = (avail_sync_w - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+
+    if (ImGui::Button(push_btn_label.c_str(), ImVec2(sync_btn_w, 0))) {
+        if (!git.HasRemote("origin")) {
+            show_git_remote_modal_ = true;
+        } else {
+            std::string err;
+            if (git.Push(false, err)) {
+                toast_manager_.ShowSuccess("Git: Changes pushed successfully.");
+            } else {
+                toast_manager_.ShowError("Git Push failed: " + err);
+            }
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        if (!git.HasRemote("origin")) {
+            ImGui::SetTooltip("Publish Branch: Configure remote repository and push");
+        } else {
+            ImGui::SetTooltip("Push local commits to remote (%d unpushed)", ahead);
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button(pull_btn_label.c_str(), ImVec2(sync_btn_w, 0))) {
+        if (!git.HasRemote("origin")) {
+            show_git_remote_modal_ = true;
+        } else {
+            std::string err;
+            if (git.Pull(err)) {
+                toast_manager_.ShowSuccess("Git: Pull completed successfully.");
+            } else {
+                toast_manager_.ShowError("Git Pull failed: " + err);
+            }
+        }
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Pull commits from remote (%d behind)", behind);
+    }
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -899,11 +1096,33 @@ void App::RenderStatusBar() {
 
     ImGui::PushStyleColor(ImGuiCol_Text, t.statusbar_fg);
 
-    // Git branch (if in a repo)
+    // Git branch (if in a repo) - interactive clickable button
     if (GitManager::Instance().HasRepo()) {
-        std::string branch_str = "git: " + GitManager::Instance().GetBranch();
-        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "%s", branch_str.c_str());
-        ImGui::SameLine(130);
+        std::string branch_str = "  git: " + GitManager::Instance().GetBranch();
+        int ahead = GitManager::Instance().GetAheadCount();
+        int behind = GitManager::Instance().GetBehindCount();
+        if (ahead > 0 || behind > 0) {
+            branch_str += " (";
+            if (ahead > 0) branch_str += "^" + std::to_string(ahead);
+            if (behind > 0) branch_str += (ahead > 0 ? " v" : "v") + std::to_string(behind);
+            branch_str += ")";
+        }
+        branch_str += "  ";
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.75f, 1.0f, 0.2f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.75f, 1.0f, 0.35f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.75f, 1.0f, 1.0f));
+
+        if (ImGui::SmallButton(branch_str.c_str())) {
+            show_git_branch_modal_ = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Branch: %s\nClick to switch or create branch", GitManager::Instance().GetBranch().c_str());
+        }
+
+        ImGui::PopStyleColor(4);
+        ImGui::SameLine();
     }
 
     // Language.
@@ -980,6 +1199,41 @@ void App::RegisterCommands() {
     command_palette_.RegisterCommand({"git.refresh", "Git: Refresh Status", "", [this]() {
         GitManager::Instance().Refresh();
         toast_manager_.ShowInfo("Git: Status refreshed.");
+    }});
+    command_palette_.RegisterCommand({"git.branch.switch", "Git: Switch / Checkout Branch...", "", [this]() {
+        show_git_branch_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.branch.create", "Git: Create New Branch...", "", [this]() {
+        show_git_branch_modal_ = true;
+    }});
+    command_palette_.RegisterCommand({"git.push", "Git: Push", "", [this]() {
+        auto& git = GitManager::Instance();
+        if (!git.HasRemote("origin")) {
+            show_git_remote_modal_ = true;
+        } else {
+            std::string err;
+            if (git.Push(false, err)) {
+                toast_manager_.ShowSuccess("Git: Changes pushed successfully.");
+            } else {
+                toast_manager_.ShowError("Git Push failed: " + err);
+            }
+        }
+    }});
+    command_palette_.RegisterCommand({"git.pull", "Git: Pull", "", [this]() {
+        auto& git = GitManager::Instance();
+        if (!git.HasRemote("origin")) {
+            show_git_remote_modal_ = true;
+        } else {
+            std::string err;
+            if (git.Pull(err)) {
+                toast_manager_.ShowSuccess("Git: Pull completed successfully.");
+            } else {
+                toast_manager_.ShowError("Git Pull failed: " + err);
+            }
+        }
+    }});
+    command_palette_.RegisterCommand({"git.remote.add", "Git: Add Remote Repository...", "", [this]() {
+        show_git_remote_modal_ = true;
     }});
     command_palette_.RegisterCommand({"git.stage_all", "Git: Stage All Changes", "", [this]() {
         if (GitManager::Instance().StageAll()) {

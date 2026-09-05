@@ -55,6 +55,8 @@ void GitManager::Refresh() {
     if (repo_path_.empty()) {
         has_repo_ = false;
         branch_.clear();
+        ahead_count_ = 0;
+        behind_count_ = 0;
         return;
     }
 
@@ -63,6 +65,8 @@ void GitManager::Refresh() {
     if (res_check.exit_code != 0 || Trim(res_check.output) != "true") {
         has_repo_ = false;
         branch_.clear();
+        ahead_count_ = 0;
+        behind_count_ = 0;
         return;
     }
 
@@ -77,6 +81,19 @@ void GitManager::Refresh() {
         if (b.empty()) b = "HEAD (detached)";
     }
     branch_ = b;
+
+    // Calculate ahead/behind counts if upstream exists
+    ahead_count_ = 0;
+    behind_count_ = 0;
+    auto res_counts = platform::RunCommand("git rev-list --left-right --count HEAD...@{u}", repo_path_);
+    if (res_counts.exit_code == 0) {
+        std::istringstream iss(res_counts.output);
+        int a = 0, b_cnt = 0;
+        if (iss >> a >> b_cnt) {
+            ahead_count_ = a;
+            behind_count_ = b_cnt;
+        }
+    }
 
     // Get porcelain status
     auto res_status = platform::RunCommand("git status --porcelain=v1 -uall", repo_path_);
@@ -196,6 +213,181 @@ bool GitManager::Commit(const std::string& message) {
     auto res = platform::RunCommand("git commit -m \"" + escaped + "\"", repo_path_);
     Refresh();
     return res.exit_code == 0;
+}
+
+std::vector<std::string> GitManager::GetBranchList() {
+    std::vector<std::string> branches;
+    if (!has_repo_) return branches;
+
+    auto res = platform::RunCommand("git branch --format=\"%(refname:short)\"", repo_path_);
+    if (res.exit_code != 0) return branches;
+
+    std::istringstream stream(res.output);
+    std::string line;
+    while (std::getline(stream, line)) {
+        std::string b = Trim(line);
+        if (!b.empty()) {
+            branches.push_back(b);
+        }
+    }
+    return branches;
+}
+
+bool GitManager::CheckoutBranch(const std::string& branch_name, std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+    std::string b = Trim(branch_name);
+    if (b.empty()) {
+        out_error = "Branch name cannot be empty.";
+        return false;
+    }
+
+    auto res = platform::RunCommand("git checkout \"" + b + "\"", repo_path_);
+    if (res.exit_code != 0) {
+        res = platform::RunCommand("git switch \"" + b + "\"", repo_path_);
+    }
+
+    Refresh();
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        if (out_error.empty()) out_error = "Failed to checkout branch: " + b;
+        return false;
+    }
+    return true;
+}
+
+bool GitManager::CreateBranch(const std::string& branch_name, bool checkout, std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+    std::string b = Trim(branch_name);
+    if (b.empty()) {
+        out_error = "Branch name cannot be empty.";
+        return false;
+    }
+
+    std::string cmd = checkout ? ("git checkout -b \"" + b + "\"") : ("git branch \"" + b + "\"");
+    auto res = platform::RunCommand(cmd, repo_path_);
+    Refresh();
+
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        if (out_error.empty()) out_error = "Failed to create branch: " + b;
+        return false;
+    }
+    return true;
+}
+
+bool GitManager::HasRemote(const std::string& remote_name) {
+    if (!has_repo_) return false;
+    auto res = platform::RunCommand("git remote", repo_path_);
+    if (res.exit_code != 0) return false;
+
+    std::istringstream stream(res.output);
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (Trim(line) == remote_name) return true;
+    }
+    return false;
+}
+
+std::string GitManager::GetRemoteUrl(const std::string& remote_name) {
+    if (!has_repo_) return "";
+    auto res = platform::RunCommand("git remote get-url \"" + remote_name + "\"", repo_path_);
+    if (res.exit_code == 0) {
+        return Trim(res.output);
+    }
+    return "";
+}
+
+bool GitManager::AddRemote(const std::string& remote_name, const std::string& url, std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+    std::string rname = Trim(remote_name);
+    std::string rurl = Trim(url);
+    if (rname.empty()) rname = "origin";
+    if (rurl.empty()) {
+        out_error = "Remote URL cannot be empty.";
+        return false;
+    }
+
+    auto res = platform::RunCommand("git remote add \"" + rname + "\" \"" + rurl + "\"", repo_path_);
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        return false;
+    }
+    return true;
+}
+
+bool GitManager::Push(bool set_upstream, std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+    if (branch_.empty() || branch_.starts_with("HEAD")) {
+        out_error = "Cannot push in detached HEAD state.";
+        return false;
+    }
+
+    std::string cmd;
+    if (set_upstream) {
+        cmd = "git push -u origin \"" + branch_ + "\"";
+    } else {
+        cmd = "git push";
+    }
+
+    auto res = platform::RunCommand(cmd, repo_path_);
+    if (res.exit_code != 0) {
+        if (res.output.find("no upstream branch") != std::string::npos ||
+            res.output.find("set-upstream") != std::string::npos) {
+            res = platform::RunCommand("git push -u origin \"" + branch_ + "\"", repo_path_);
+        }
+    }
+
+    Refresh();
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        if (out_error.empty()) out_error = "Git push failed.";
+        return false;
+    }
+    return true;
+}
+
+bool GitManager::Pull(std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+
+    auto res = platform::RunCommand("git pull", repo_path_);
+    Refresh();
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        if (out_error.empty()) out_error = "Git pull failed.";
+        return false;
+    }
+    return true;
+}
+
+bool GitManager::Fetch(std::string& out_error) {
+    if (!has_repo_) {
+        out_error = "No Git repository found.";
+        return false;
+    }
+
+    auto res = platform::RunCommand("git fetch", repo_path_);
+    Refresh();
+    if (res.exit_code != 0) {
+        out_error = Trim(res.output);
+        if (out_error.empty()) out_error = "Git fetch failed.";
+        return false;
+    }
+    return true;
 }
 
 }  // namespace luce

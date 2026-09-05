@@ -100,6 +100,8 @@ private:
     bool              show_plugins_       = false;
     bool              show_demo_window_   = false;
     bool              show_about_modal_   = false;
+    bool              show_git_branch_modal_ = false;
+    bool              show_git_remote_modal_ = false;
 };
 
 }  // namespace luce
