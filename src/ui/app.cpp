@@ -860,7 +860,7 @@ void App::RenderSourceControl() {
 
     // Branch selector and new branch button
     ImGui::AlignTextToFramePadding();
-    std::string branch_display = " " + git.GetBranch() + " v ";
+    std::string branch_display = " " + git.GetBranch() + "  ▾ ";
     if (ImGui::Button(branch_display.c_str())) {
         show_git_branch_modal_ = true;
     }
@@ -903,8 +903,8 @@ void App::RenderSourceControl() {
     // ── Sync Actions (Push & Pull) ──────────────────────────────────────
     int ahead = git.GetAheadCount();
     int behind = git.GetBehindCount();
-    std::string push_btn_label = ahead > 0 ? ("Push (^ " + std::to_string(ahead) + ")") : "Push";
-    std::string pull_btn_label = behind > 0 ? ("Pull (v " + std::to_string(behind) + ")") : "Pull";
+    std::string push_btn_label = ahead > 0 ? ("Push  ↑" + std::to_string(ahead)) : "Push";
+    std::string pull_btn_label = behind > 0 ? ("Pull  ↓" + std::to_string(behind)) : "Pull";
 
     float avail_sync_w = ImGui::GetContentRegionAvail().x;
     float sync_btn_w = (avail_sync_w - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
@@ -1103,8 +1103,8 @@ void App::RenderStatusBar() {
         int behind = GitManager::Instance().GetBehindCount();
         if (ahead > 0 || behind > 0) {
             branch_str += " (";
-            if (ahead > 0) branch_str += "^" + std::to_string(ahead);
-            if (behind > 0) branch_str += (ahead > 0 ? " v" : "v") + std::to_string(behind);
+            if (ahead > 0) branch_str += "↑" + std::to_string(ahead);
+            if (behind > 0) branch_str += (ahead > 0 ? " ↓" : "↓") + std::to_string(behind);
             branch_str += ")";
         }
         branch_str += "  ";
