@@ -858,13 +858,39 @@ void App::RenderSourceControl() {
         return;
     }
 
-    // Branch selector and new branch button
-    ImGui::AlignTextToFramePadding();
-    std::string branch_display = " " + git.GetBranch() + "  ▾ ";
-    if (ImGui::Button(branch_display.c_str())) {
-        show_git_branch_modal_ = true;
+    // Branch selector combo and new branch button
+    float icon_sz = 14.0f * ui_scale_;
+    float refresh_btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float plus_btn_w = ImGui::GetFrameHeight();
+    float total_reserved = refresh_btn_w + plus_btn_w + ImGui::GetStyle().ItemSpacing.x * 2.0f + 8.0f;
+    float combo_w = ImGui::GetContentRegionAvail().x - total_reserved;
+    if (combo_w < 120.0f) combo_w = 120.0f;
+
+    ImGui::SetNextItemWidth(combo_w);
+    if (ImGui::BeginCombo("##git_branch_combo", git.GetBranch().c_str())) {
+        if (ImGui::Selectable("+ Create New Branch...")) {
+            show_git_branch_modal_ = true;
+        }
+        ImGui::Separator();
+        for (const auto& b : git.GetBranchList()) {
+            bool is_selected = (b == git.GetBranch());
+            if (ImGui::Selectable(b.c_str(), is_selected)) {
+                if (!is_selected) {
+                    std::string err;
+                    if (git.CheckoutBranch(b, err)) {
+                        toast_manager_.ShowSuccess("Git: Switched to branch '" + b + "'");
+                    } else {
+                        toast_manager_.ShowError(err);
+                    }
+                }
+            }
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Switch Branch (click to view branches)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Branch: %s (click to switch)", git.GetBranch().c_str());
 
     ImGui::SameLine();
     if (ImGui::Button("+##git_new_branch")) {
@@ -872,9 +898,7 @@ void App::RenderSourceControl() {
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Create New Branch...");
 
-    float icon_sz = 14.0f * ui_scale_;
-    float btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
-    float right_x = ImGui::GetWindowContentRegionMax().x - btn_w - 4.0f;
+    float right_x = ImGui::GetWindowContentRegionMax().x - refresh_btn_w - 4.0f;
     if (right_x > ImGui::GetCursorPosX()) {
         ImGui::SameLine(right_x);
     } else {
