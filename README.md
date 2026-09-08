@@ -5,14 +5,14 @@
 ![Status](https://img.shields.io/badge/status-active%20development-orange)
 ![C++](https://img.shields.io/badge/C%2B%2B-23-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPLv3-green)
 
 ---
 
 ## Features
 
 - **Modern Visuals & Theme Engine**:
-  - Exact VS Code Dark Modern palette (`#181818` background, tailored syntax colors).
+  - Modern Dark theme, inspired by VS Code Dark Modern.
   - IBM Plex Sans UI typography & Lilex Code Monospace font.
   - Native SVG vector icon rasterizer engine with real file & folder icons.
   - GUI Zoom scaling (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`).
@@ -29,10 +29,10 @@
 - **Lua 5.4 Scripting Plugin System**:
   - Zero-compilation plugin model — write a `.lua` file and drop it into `plugins/` next to the executable.
   - Full editor API exposed to scripts: insert/delete text, register Command Palette commands, query cursor position and file path.
-  - Isolated `lua_State` per plugin — one broken script cannot crash others.
+  - Isolated `lua_State` per plugin.
   - Optional `on_tick(dt)` and `on_shutdown()` lifecycle callbacks.
 - **Embedded Terminal & Process Engine**:
-  - Integrated interactive terminal subprocess (`cmd.exe` / `powershell` / `bash`) with real-time I/O piping.
+  - Integrated interactive terminal subprocess (`cmd.exe` / `powershell` / `bash`).
 - **File Explorer & Workspace**:
   - File tree view with root workspace header, folder context actions (New File, New Folder, Rename, Delete).
   - One-click Explorer Refresh button.
@@ -123,4 +123,11 @@ Detailed documentation is available on the [Luce Documentation Site](docs-site/)
 
 ## License
 
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+This repository contains components licensed under different terms:
+
+- **Luce code editor** is licensed under the [GNU General Public License v3.0](LICENSE)
+- **Documentation website** is licensed under the [MIT License](docs-site/LICENSE)
+- **Icons** (`assets/icons`):
+  - The icons are derived from [vscode-icons](https://github.com/vscode-icons/vscode-icons) project and are licensed under the [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license.
+  - UI Icons (such as `delete.svg`) are from [Material Icons](https://fonts.google.com/icons) by Google, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  - Any branded icons/logos included belong to the copyright and trademark owners
