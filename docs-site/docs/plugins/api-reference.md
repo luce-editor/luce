@@ -1,139 +1,139 @@
 ---
 id: api-reference
 title: Lua Plugin API Reference
-sidebar_label: Referencja API
+sidebar_label: API Reference
 slug: /plugins/api-reference
 ---
 
 # Lua Plugin API Reference
 
-Wszystkie funkcje dostępne dla skryptów Lua są umieszczone w globalnej tabeli `luce`.
+All functions available to Lua scripts are exposed in the global `luce` table.
 
 ---
 
-## Metadane wtyczki
+## Plugin Metadata
 
-Opcjonalna tabela definiująca metadane widoczne w panelu Plugins:
+An optional table defining metadata shown in the Plugins panel:
 
 ```lua
 luce.plugin = {
-    name        = "Nazwa Wtyczki",   -- wyświetlana w panelu Plugins
-    version     = "1.0.0",           -- wersja (dowolny string)
-    author      = "Twój nick",       -- autor
-    description = "Co ta wtyczka robi.", -- krótki opis
+    name        = "My Plugin",       -- shown in the Plugins panel
+    version     = "1.0.0",           -- version string
+    author      = "Your Name",       -- author
+    description = "What this plugin does.",
 }
 ```
 
 ---
 
-## Komendy
+## Commands
 
 ### `luce.register_command(id, display_name, fn)`
 
-Rejestruje komendę widoczną w Command Palette (`Ctrl+Shift+P`).
+Registers a command visible in the Command Palette (`Ctrl+Shift+P`).
 
-| Parametr       | Typ      | Opis                                          |
-|----------------|----------|-----------------------------------------------|
-| `id`           | `string` | Unikalny identyfikator (np. `"my_cmd"`)       |
-| `display_name` | `string` | Nazwa widoczna w palecie (np. `"My: Action"`) |
-| `fn`           | `function` | Funkcja wywoływana po wybraniu komendy      |
+| Parameter      | Type       | Description                                       |
+|----------------|------------|---------------------------------------------------|
+| `id`           | `string`   | Unique identifier (e.g. `"my_cmd"`)               |
+| `display_name` | `string`   | Name shown in the palette (e.g. `"My: Action"`)   |
+| `fn`           | `function` | Function called when the command is executed      |
 
 ```lua
-luce.register_command("say_hi", "Moja Wtyczka: Przywitaj się", function()
-    luce.insert_text("Cześć!")
+luce.register_command("say_hi", "My Plugin: Say Hello", function()
+    luce.insert_text("Hello!")
 end)
 ```
 
 ---
 
-## Edycja tekstu
+## Text Editing
 
 ### `luce.insert_text(text)`
-Wstawia podany tekst w miejscu kursora.
+Inserts the given string at the current cursor position.
 
 ### `luce.delete_selection()`
-Usuwa aktualnie zaznaczony tekst.
+Deletes the currently selected text.
 
 ### `luce.get_selection() → string`
-Zwraca aktualnie zaznaczony tekst. Jeśli nic nie jest zaznaczone, zwraca `""`.
+Returns the currently selected text. Returns `""` if nothing is selected.
 
 ### `luce.get_line(n) → string`
-Zwraca tekst linii o podanym numerze (indeksowanie od `0`).
+Returns the text of line number `n` (0-indexed).
 
 ---
 
-## Kursor
+## Cursor
 
 ### `luce.get_cursor_line() → number`
-Zwraca numer aktualnej linii kursora (indeksowanie od `0`).
+Returns the current cursor line number (0-indexed).
 
 ### `luce.get_cursor_column() → number`
-Zwraca numer aktualnej kolumny kursora (indeksowanie od `0`).
+Returns the current cursor column number (0-indexed).
 
 ### `luce.set_cursor(line, col)`
-Przesuwa kursor na podaną pozycję.
+Moves the cursor to the given position.
 
 ---
 
-## Plik
+## File
 
 ### `luce.get_file_path() → string`
-Zwraca pełną ścieżkę do aktualnie otwartego pliku (np. `"C:/Projects/app/src/main.cpp"`). Jeśli żaden plik nie jest otwarty, zwraca `""`.
+Returns the full path of the currently open file (e.g. `"C:/Projects/app/src/main.cpp"`). Returns `""` if no file is open.
 
 ### `luce.get_file_name() → string`
-Zwraca samą nazwę aktualnego pliku wraz z rozszerzeniem (np. `"main.cpp"` lub `"Untitled-1"`). Jeśli edytor jest pusty, zwraca `""`.
+Returns the file name with extension of the currently open file (e.g. `"main.cpp"` or `"Untitled-1"`). Returns `""` if no editor tab is active.
 
 ### `luce.get_file_extension() → string`
-Zwraca samo rozszerzenie aktualnego pliku wraz z kropką (np. `".cpp"` lub `".lua"`). Jeśli plik nie ma rozszerzenia lub nie jest zapisany, zwraca `""`.
+Returns the file extension with leading dot of the currently open file (e.g. `".cpp"` or `".lua"`). Returns `""` if the file has no extension or is untitled.
 
 ---
 
-## Status i Powiadomienia (Toasty)
+## Status & Toast Notifications
 
 ### `luce.set_status(text)`
-Wyświetla powiadomienie Toast w lewym dolnym rogu edytora (styl VS Code) oraz drukuje komunikat w konsoli.
+Displays a floating Toast notification in the bottom-left corner of the editor (VS Code style) and prints to the console.
 
 ### `luce.show_notification(message, [level], [duration])`
-Wyświetla wyskakujące okienko Toast w lewym dolnym rogu ekranu z automatycznym zanikaniem.
-- `message` (`string`): treść powiadomienia.
-- `level` (`string`, opcjonalny): `"info"`, `"warn"`, `"error"` lub `"success"` (domyślnie `"info"`).
-- `duration` (`number`, opcjonalny): czas wyświetlania w sekundach (domyślnie `4.0s`).
+Displays a bottom-left floating Toast notification with auto-fadeout.
+- `message` (`string`): the notification text.
+- `level` (`string`, optional): `"info"`, `"warn"`, `"error"`, or `"success"` (default: `"info"`).
+- `duration` (`number`, optional): visibility duration in seconds (default: `4.0s`).
 
 ### `luce.show_error(text)`
-Wyświetla czerwone powiadomienie Toast o błędzie.
+Displays a red error Toast notification.
 
 ### `luce.show_warning(text)`
-Wyświetla żółte powiadomienie Toast z ostrzeżeniem.
+Displays a yellow warning Toast notification.
 
 ### `luce.show_info(text)`
-Wyświetla niebieskie powiadomienie informacyjne Toast.
+Displays a blue info Toast notification.
 
 ### `luce.log(text)`
-Wypisuje wiadomość info do konsoli (`[Lua Plugin INFO] ...`).
+Prints an info message to the console (`[Lua Plugin INFO] ...`).
 
 ### `luce.warn(text)`
-Wypisuje ostrzeżenie do konsoli (`[Lua Plugin WARN] ...`).
+Prints a warning to the console (`[Lua Plugin WARN] ...`).
 
 ---
 
-## Callbacki cyklu życia
+## Lifecycle Callbacks
 
-Opcjonalne funkcje globalne, które Luce wywoła automatycznie:
+Optional global functions that Luce will call automatically:
 
 ### `function on_tick(dt)`
-Wywoływana każdą klatkę. Parametr `dt` to czas od ostatniej klatki w sekundach.
+Called every frame. `dt` is the time since the last frame in seconds.
 
 ```lua
 function on_tick(dt)
-    -- unikaj ciężkiej pracy tutaj — to jest hot path!
+    -- avoid heavy work here — this is a hot path!
 end
 ```
 
 ### `function on_shutdown()`
-Wywoływana przy zamykaniu edytora (lub przy ręcznym odładowaniu wtyczki).
+Called when the editor closes (or when the plugin is manually unloaded).
 
 ```lua
 function on_shutdown()
-    luce.log("Wtyczka zamknięta.")
+    luce.log("Plugin shutting down.")
 end
 ```

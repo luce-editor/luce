@@ -1,44 +1,43 @@
 ---
 id: diagnostics
-title: Wykrywanie Błędów i Diagnostyka
-sidebar_label: Diagnostyka i Problemy
+title: Diagnostics & Error Detection
+sidebar_label: Diagnostics & Problems
 slug: /interface/diagnostics
 ---
 
-# Wykrywanie Błędów i Diagnostyka
+# Diagnostics & Error Detection
 
-Luce wyposażony jest w zintegrowany silnik diagnostyczny (**Diagnostic Engine**), który analizuje kod źródłowy w locie oraz przy zapisie za pomocą natywnych kompilatorów i linterów, prezentując wykryte błędy w czytelnej formie.
-
----
-
-## Jak Działa Silnik Diagnostyczny
-
-Silnik uruchamia bezobiektową analizę składniową (`syntax-only check`) w tle, nie spowalniając interfejsu użytkownika:
-
-- **C / C++**: Uruchamia `clang++ -fsyntax-only -Wall` (z automatycznym fallbackiem do `g++` lub MSVC `cl.exe /Zs`).
-- **Python**: Uruchamia kompilację bajtową składni `python -m py_compile`.
-- **Rust**: Uruchamia sprawdzanie składni za pomocą `rustc --error-format=short`.
-
-Wynik działania kompilatora jest przetwarzany przez uniwersalny parser Luce, który wyodrębnia plik, numer wiersza, kolumny oraz treść błędu lub ostrzeżenia.
+Luce features a built-in **Diagnostic Engine** that inspects code in real-time and on save using native compilers and linters, highlighting issues directly within the code editor.
 
 ---
 
-## Prezentacja w Edytorze
+## How It Works
 
-### 1. Podkreślenia Faliste (Squiggly Underlines)
-- Wiersze i tokeny zawierające błędy podświetlane są na czerwono charakterystyczną falistą linią (`~ ~ ~`).
-- Ostrzeżenia i uwagi sygnalizowane są kolorem żółtym.
-- **Dymek po najechaniu (Hover Tooltip)**: Po umieszczeniu kursora myszy nad podkreślonym kodem wyświetla się okienko z dokładną treścią komunikatu kompilatora.
+The engine executes background syntax-only compilation checks without blocking the UI:
 
-### 2. Panel Problems (Dolny Dok)
-- W dolnym panelu dokowalnym w zakładce **Problems** wyświetlana jest skumulowana lista wszystkich wykrytych problemów w projekcie.
-- Każdy wpis zawiera ikonę wagi (błąd / ostrzeżenie), nazwę pliku, numer linii, kolumny oraz opis.
-- **Nawigacja**: Dwukrotne kliknięcie na dowolny błąd natychmiast otwiera dany plik i ustawia kursor dokładnie w miejscu wystąpienia problemu.
+- **C / C++**: Invokes `clang++ -fsyntax-only -Wall` (with automatic fallback to `g++` or MSVC `cl.exe /Zs`).
+- **Python**: Invokes bytecode syntax check via `python -m py_compile`.
+- **Rust**: Runs fast syntax checks via `rustc --error-format=short`.
+
+Compiler diagnostic messages are parsed into structured problem items containing the file path, line number, column, severity, and error message.
 
 ---
 
-## Uruchamianie Sprawdzania
+## Editor Visualization
 
-1. **Automatycznie**: Przy każdym zapisie pliku (`Ctrl+S`).
-2. **Skrótem klawiszowym**: **Ctrl+Shift+B** (weryfikuje bieżący plik).
-3. **Z Command Palette**: Komenda `Diagnostics: Check Active File`.
+### 1. Squiggly Underlines
+- Errors are highlighted with a distinct wavy red squiggly line (`~ ~ ~`) under the problematic code segment.
+- Warnings are marked with a warm yellow squiggly underline.
+- **Hover Tooltips**: Hovering the mouse cursor over underlined code reveals a floating tooltip containing the compiler's diagnostic message.
+
+### 2. Problems Panel (Bottom Dock)
+- The **Problems** tab in the bottom dock displays a project-wide overview of all detected errors and warnings.
+- **Navigation**: Double-clicking any problem entry instantly opens the file and places the cursor right at the error's line and column.
+
+---
+
+## Triggering Diagnostics
+
+1. **Automatically**: On every file save (`Ctrl+S`).
+2. **Keyboard Shortcut**: **Ctrl+Shift+B** (runs check on active file).
+3. **Command Palette**: `Diagnostics: Check Active File`.

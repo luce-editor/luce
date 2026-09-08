@@ -112,11 +112,11 @@ cmake --build build
 
 ## Documentation
 
-Detailed documentation is available on the [Luce Documentation Site](docs-site/).
+Detailed documentation is available on the [Luce Documentation Site](https://luce-editor.github.io/luce/).
 
-- [Getting Started](docs-site/docs/intro.md)
-- [Creating a Lua Plugin](docs-site/docs/plugins/creating-a-plugin.md)
-- [Lua Plugin API Reference](docs-site/docs/plugins/api-reference.md)
+- [Getting Started](https://luce-editor.github.io/luce/docs/intro)
+- [Creating a Lua Plugin](https://luce-editor.github.io/luce/docs/plugins/creating-a-plugin)
+- [Lua Plugin API Reference](https://luce-editor.github.io/luce/docs/plugins/api-reference)
 - [Architecture & Design Guidelines](.agents/AGENTS.md)
 
 ---

@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Luce Editor',
-  tagline: 'Niezwykle szybki, minimalistyczny edytor kodu w C++23',
+  tagline: 'Blazing-Fast, Minimalist Modern C++23 Code Editor',
   favicon: 'img/favicon.ico',
 
   url: 'https://luce-editor.github.io',
@@ -17,18 +17,18 @@ const config: Config = {
   onBrokenMarkdownLinks: 'warn',
 
   i18n: {
-    defaultLocale: 'pl',
-    locales: ['pl', 'en'],
+    defaultLocale: 'en',
+    locales: ['en', 'pl'],
     localeConfigs: {
-      pl: {
-        label: 'Polski',
-        direction: 'ltr',
-        htmlLang: 'pl-PL',
-      },
       en: {
         label: 'English',
         direction: 'ltr',
         htmlLang: 'en-US',
+      },
+      pl: {
+        label: 'Polski',
+        direction: 'ltr',
+        htmlLang: 'pl-PL',
       },
     },
   },
@@ -67,7 +67,7 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Dokumentacja',
+          label: 'Documentation',
         },
         {
           type: 'localeDropdown',
@@ -84,58 +84,58 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Dokumentacja',
+          title: 'Documentation',
           items: [
             {
-              label: 'Wprowadzenie',
+              label: 'Introduction',
               to: '/docs/intro',
             },
             {
-              label: 'Motywy i Style',
+              label: 'Themes & Styling',
               to: '/docs/themes/overview',
             },
             {
-              label: 'System Wtyczek',
+              label: 'Plugin System',
               to: '/docs/plugins/architecture',
             },
             {
-              label: 'Interfejs i Układ',
+              label: 'Interface & Layout',
               to: '/docs/interface/overview',
             },
           ],
         },
         {
-          title: 'Architektura',
+          title: 'Architecture',
           items: [
             {
-              label: 'Wirtualne Przewijanie',
+              label: 'Virtual Scrolling',
               to: '/docs/architecture',
             },
             {
-              label: 'Leksery i Składnia',
+              label: 'Lexers & Syntax',
               to: '/docs/syntax/lexers',
             },
             {
-              label: 'API Pluginów Lua',
+              label: 'Lua Plugin API',
               to: '/docs/plugins/api-reference',
             },
           ],
         },
         {
-          title: 'Projekt',
+          title: 'Project',
           items: [
             {
-              label: 'Repozytorium GitHub',
+              label: 'GitHub Repository',
               href: 'https://github.com/luce-editor/luce',
             },
             {
-              label: 'Licencja (MIT)',
+              label: 'License (MIT)',
               to: '/docs/intro',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Luce Editor Project. Zbudowano przy użyciu Dear ImGui, SDL2, OpenGL i Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Luce Editor Project. Built with Dear ImGui, SDL2, OpenGL, and Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

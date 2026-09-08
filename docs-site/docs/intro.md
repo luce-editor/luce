@@ -1,97 +1,97 @@
 ---
 id: intro
-title: Wprowadzenie i Szybki Start
-sidebar_label: Wprowadzenie
+title: Introduction & Quick Start
+sidebar_label: Introduction
 slug: /intro
 ---
 
-# Witamy w Edytorze Luce
+# Welcome to Luce Editor
 
-**Luce** to niesamowicie szybki, lekki i nowoczesny edytor kodu napisany w **C++23** przy użyciu **Dear ImGui** (gałąź docking), **SDL2** oraz **OpenGL 3.3**.
+**Luce** is a blazing-fast, lightweight, and modern code editor written in **C++23** using **Dear ImGui** (docking branch), **SDL2**, and **OpenGL 3.3**.
 
-Zaprojektowany z myślą o minimalizmie, bezkompromisowej responsywności i modularnej rozszerzalności, Luce łączy estetykę nowoczesnych edytorów z surową wydajnością i znikomym zużyciem pamięci RAM natywnej aplikacji pulpitu.
+Designed with minimalism, extreme responsiveness, and modular extensibility in mind, Luce combines the visual polish of modern IDEs with the raw speed and low memory footprint of a native native desktop application.
 
-![Luce Logo](@site/static/img/luce-logo.png)
-
----
-
-## Główne Funkcje
-
-- **Wydajność C++23:** Błyskawiczny czas startu poniżej sekundy, minimalne opóźnienia i znikome zużycie RAM.
-- **Bogaty Silnik Motywów:** Wbudowane palety VS Code Dark Modern, Catppuccin Mocha, One Dark i Nord, a także obsługa własnych plików CSS z funkcją **Hot Reload na żywo**.
-- **System Wtyczek Lua 5.4:** Skryptowe rozszerzenia edytora — wystarczy plik `.lua` w folderze `plugins/`, bez kompilacji i bez konfiguracji.
-- **Elastyczny Menedżer Dokowania:** Oparty o Dear ImGui Docking, pozwalający dowolnie układać edytor, pasek boczny oraz dolne panele.
-- **Wbudowany Terminal:** Wielosesyjny terminal VT100 z obsługą kart, PowerShell (`pwsh.exe`) / Bash, synchronizacją katalogu projektu i TrueColor.
-- **Pełna Kontrola Wersji Git:** Asynchroniczny panel Source Control (60 FPS) z gałęziami, synchronizacją Push/Pull, schowkiem (stash), tagami, klonowaniem repozytoriów i bezpiecznymi oknami potwierdzenia.
-- **Wykrywanie Problemów (Diagnostics):** Dedykowana zakładka Problems z nawigacją — podwójne kliknięcie przenosi bezpośrednio do wiersza z błędem.
-- **Command Palette i Quick Open:** Wyszukiwarka poleceń (`Ctrl+Shift+P`), szybkie otwieranie plików (`Ctrl+P`) oraz skok do linii (`:numer_linii`).
-- **Wirtualne Przewijanie:** Płynna edycja plików liczących ponad 100 000 linii w stałych 60+ FPS dzięki buforowi linii i inkrementalnym lekserom.
+![Luce Architecture Overview](@site/static/img/luce-logo.png)
 
 ---
 
-## Budowanie ze Źródeł
+## Key Features
 
-### Wymagania
+- **Native C++23 Performance:** Minimal latency, sub-second cold boot, low RAM footprint.
+- **Rich Theme Engine:** Built-in VS Code Dark Modern, Catppuccin Mocha, One Dark, and Nord themes, plus custom CSS-like theme files with **Live Hot Reload**.
+- **Lua 5.4 Plugin System:** Scriptable editor extensions — just drop a `.lua` file into the `plugins/` folder, no compilation or setup required.
+- **Docking Window Manager:** Powered by Dear ImGui Docking, allowing full flexibility to arrange Editor, Sidebar, and bottom dock panels.
+- **Embedded Terminal:** Multi-session VT100 terminal with tab management, PowerShell (`pwsh.exe`) / Bash, automatic project folder sync, and TrueColor support.
+- **Native Git Source Control:** 60 FPS asynchronous version control panel with branch management, Push/Pull sync, stashing, tagging, repository cloning, and safety confirmation modals.
+- **Diagnostics & Problems Panel:** Dedicated Problems tab with clickable error navigation — double-clicking jumps directly to the source code line.
+- **Command Palette & Quick Open:** Full fuzzy-style command palette (`Ctrl+Shift+P`), file jumping (`Ctrl+P`), and line jumping (`:line_number`).
+- **Virtual Scrolling & Incremental Highlighting:** Documents with 100,000+ lines render smoothly at 60+ FPS using line-by-line token caching and stateful hand-written lexers.
 
-- **CMake 3.20** lub nowszy
-- **Kompilator C++23**:
-  - Windows: MSVC v143 (Visual Studio 2022 17.4+) lub Clang 16+
-  - Linux: GCC 13+ lub Clang 16+
-  - macOS: Apple Clang 15+ lub LLVM Clang 16+
-- Sterowniki z obsługą **OpenGL 3.3+**
+---
 
-Wszystkie zależności (SDL2, Dear ImGui Docking, nlohmann/json) pobierane są automatycznie przez CMake (`FetchContent`).
+## Building from Source
 
-### Instrukcja Budowania (Windows / Visual Studio)
+### Prerequisites
+
+- **CMake 3.20** or newer
+- **C++23 compatible compiler**:
+  - Windows: MSVC v143 (Visual Studio 2022 17.4+) or Clang 16+
+  - Linux: GCC 13+ or Clang 16+
+  - macOS: Apple Clang 15+ or LLVM Clang 16+
+- **OpenGL 3.3+** graphics drivers
+
+All dependencies (SDL2, Dear ImGui Docking branch, nlohmann/json) are fetched automatically via CMake's `FetchContent`.
+
+### Build Steps (Windows / Visual Studio)
 
 ```powershell
-# Sklonuj repozytorium
+# Clone the repository
 git clone https://github.com/luce-editor/luce.git
 cd luce
 
-# Wygeneruj projekt w trybie Release
+# Configure CMake with Release build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Zbuduj aplikację
+# Build executable and plugins
 cmake --build build --config Release
 
-# Uruchom Luce
+# Run Luce
 .\build\Release\luce.exe
 ```
 
-### Instrukcja Budowania (Linux / macOS)
+### Build Steps (Linux / macOS)
 
 ```bash
-# Konfiguracja i kompilacja
+# Configure & build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# Uruchomienie
+# Run Luce
 ./build/luce
 ```
 
 ---
 
-## Domyślne Skróty Klawiszowe
+## Default Keyboard Shortcuts
 
-| Skrót | Akcja | Opis |
+| Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| `Ctrl+Shift+P` | **Command Palette** | Otwiera paletę poleceń edytora i wtyczek |
-| `Ctrl+P` | **Quick Open** | Szybkie wyszukiwanie i otwieranie plików projektu |
-| `Ctrl+G` | **Przejdź do linii** | Skok do podanego numeru wiersza (`:linia`) |
-| `Ctrl+O` | **Otwórz plik** | Systemowe okno wyboru pliku |
-| `Ctrl+Shift+O` | **Otwórz folder** | Otwiera katalog projektu w Eksploratorze |
-| `Ctrl+S` | **Zapisz plik** | Zapisuje aktywny bufor |
-| `Ctrl+W` | **Zamknij kartę** | Zamyka aktualnie aktywną kartę |
-| `Ctrl+Z` | **Cofnij (Undo)** | Cofa ostatnią zmianę w tekście |
-| `Ctrl+Y` / `Ctrl+Shift+Z` | **Ponów (Redo)** | Ponawia cofniętą zmianę |
-| `Ctrl+=` / `Ctrl++` | **Powiększ (Zoom In)**| Zwiększa rozmiar czcionki edytora |
-| `Ctrl+-` | **Pomniejsz (Zoom Out)**| Zmniejsza rozmiar czcionki edytora |
-| `Ctrl+0` | **Resetuj Zoom** | Przywraca domyślny rozmiar czcionki |
-| `Ctrl+` ` | **Przełącz Terminal** | Pokazuje lub ukrywa dolny terminal |
+| `Ctrl+Shift+P` | **Command Palette** | Open palette to execute any registered command |
+| `Ctrl+P` | **Quick Open** | Rapidly search and open project files |
+| `Ctrl+G` | **Go to Line** | Jump to a specific line number (`:line`) |
+| `Ctrl+O` | **Open File** | Native OS file chooser dialog |
+| `Ctrl+Shift+O` | **Open Folder** | Open project directory in File Explorer |
+| `Ctrl+S` | **Save File** | Save active document buffer |
+| `Ctrl+W` | **Close Tab** | Close current editor tab |
+| `Ctrl+Z` | **Undo** | Undo text buffer modification |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | **Redo** | Redo previously undone action |
+| `Ctrl+=` / `Ctrl++` | **Zoom In** | Increase editor font scale |
+| `Ctrl+-` | **Zoom Out** | Decrease editor font scale |
+| `Ctrl+0` | **Reset Zoom** | Reset font size to default |
+| `Ctrl+` ` | **Toggle Terminal** | Show / hide bottom embedded terminal |
 
 ---
 
-## Licencja
+## License
 
-Luce jest projektem otwartoźródłowym wydanym na licencji **GPL v3**.
+Luce is licensed under the open-source **MIT License**.

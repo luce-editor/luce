@@ -1,0 +1,54 @@
+{
+  "link.title.Documentation": {
+    "message": "Dokumentacja",
+    "description": "The title of the footer links column with title=Documentation in the footer"
+  },
+  "link.title.Architecture": {
+    "message": "Architektura",
+    "description": "The title of the footer links column with title=Architecture in the footer"
+  },
+  "link.title.Project": {
+    "message": "Projekt",
+    "description": "The title of the footer links column with title=Project in the footer"
+  },
+  "link.item.label.Introduction": {
+    "message": "Wprowadzenie",
+    "description": "The label of footer link with label=Introduction linking to /docs/intro"
+  },
+  "link.item.label.Themes & Styling": {
+    "message": "Motywy i Style",
+    "description": "The label of footer link with label=Themes & Styling linking to /docs/themes/overview"
+  },
+  "link.item.label.Plugin System": {
+    "message": "System Wtyczek",
+    "description": "The label of footer link with label=Plugin System linking to /docs/plugins/architecture"
+  },
+  "link.item.label.Interface & Layout": {
+    "message": "Interfejs i Układ",
+    "description": "The label of footer link with label=Interface & Layout linking to /docs/interface/overview"
+  },
+  "link.item.label.Virtual Scrolling": {
+    "message": "Wirtualne Przewijanie",
+    "description": "The label of footer link with label=Virtual Scrolling linking to /docs/architecture"
+  },
+  "link.item.label.Lexers & Syntax": {
+    "message": "Leksery i Składnia",
+    "description": "The label of footer link with label=Lexers & Syntax linking to /docs/syntax/lexers"
+  },
+  "link.item.label.Lua Plugin API": {
+    "message": "API Pluginów Lua",
+    "description": "The label of footer link with label=Lua Plugin API linking to /docs/plugins/api-reference"
+  },
+  "link.item.label.GitHub Repository": {
+    "message": "Repozytorium GitHub",
+    "description": "The label of footer link with label=GitHub Repository linking to https://github.com/luce-editor/luce"
+  },
+  "link.item.label.License (MIT)": {
+    "message": "Licencja (MIT)",
+    "description": "The label of footer link with label=License (MIT) linking to /docs/intro"
+  },
+  "copyright": {
+    "message": "Copyright © 2026 Luce Editor Project. Zbudowano przy użyciu Dear ImGui, SDL2, OpenGL i Docusaurus.",
+    "description": "The footer copyright"
+  }
+}

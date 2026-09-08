@@ -1,39 +1,39 @@
 ---
 id: creating-a-plugin
-title: Tworzenie Własnych Wtyczek (Lua)
-sidebar_label: Poradnik Wtyczek
+title: Creating Custom Plugins (Lua)
+sidebar_label: Plugin Tutorial
 slug: /plugins/creating-a-plugin
 ---
 
-# Tworzenie Własnych Wtyczek (Lua)
+# Creating Custom Plugins (Lua)
 
-Luce pozwala na rozszerzanie edytora za pomocą prostego i szybkiego języka [Lua 5.4](https://www.lua.org/) — bez kompilacji, bez CMake i bez zewnętrznych zależności.
+Luce allows extending the editor using the simple and lightweight [Lua 5.4](https://www.lua.org/) scripting language — no compilation, no CMake, and no external dependencies required.
 
-Pliki pluginów z rozszerzeniem `.lua` umieszczane są w katalogu `plugins/` obok pliku wykonywalnego `luce.exe`.
+Plugin `.lua` files reside in the `plugins/` directory next to the `luce.exe` executable.
 
 ---
 
-## Praktyczny przykład wtyczki (`plugins/skeletonCpp.lua`)
+## Practical Plugin Example (`plugins/skeletonCpp.lua`)
 
-Poniższy skrypt rejestruje dwie komendy w Command Palette: wstawianie szkieletu funkcji `main()` w C++ oraz automatyczne generowanie nagłówka klasy na podstawie nazwy aktywnego pliku. Demonstruje również operacje na tekście oraz powiadomienia toast.
+The script below registers two commands in the Command Palette: inserting a basic C++ `main()` function skeleton and dynamically generating a class header based on the active file name. It also demonstrates text buffer manipulation and toast notifications.
 
 ```lua
 -- ============================================================================
---  skeletonCpp.lua -> wstawianie szkieletu C++ w miejscu kursora
+--  skeletonCpp.lua -> insert basic C++ skeleton at cursor
 --
---  Instalacja: wrzuć ten plik do katalogu plugins/
---  Użycie: Ctrl+Shift+P -> Skeleton: Insert Basic Skeleton
+--  Install: drop this file into plugins/ folder next to luce.exe
+--  Use: Ctrl+Shift+P -> Skeleton: Insert Basic Skeleton
 -- ============================================================================
 
--- 1. Metadane wtyczki (widoczne w panelu Plugins)
+-- 1. Plugin metadata (displayed in the Plugins panel)
 luce.plugin = {
     name = "Skeleton",
     version = "1.0.0",
     author = "Luce Team",
-    description = "Wstawia podstawowy szkielet C++ oraz nagłówek klasy"
+    description = "Inserts basic C++ skeleton and class header"
 }
 
--- 2. Funkcja wstawiająca funkcję main()
+-- 2. Function inserting a standard main() function
 local function insert_skel()
     local skelMesh = [[
 #include <iostream>
@@ -48,7 +48,7 @@ int main() {
     luce.show_notification(string.format("Skeleton inserted for %s", file_name), "success", 5)
 end
 
--- 3. Funkcja generująca nagłówek klasy z dopasowaną nazwą pliku
+-- 3. Function generating a class header matched to the file name
 local function insert_header_skel()
     local file_name = luce.get_file_name()
     local pos = string.find(file_name, "%.")
@@ -69,80 +69,80 @@ private:
     luce.show_notification(string.format("Header inserted for %s", file_name), "success", 5)
 end
 
--- 4. Rejestracja poleceń w Command Palette (Ctrl+Shift+P)
+-- 4. Register commands in the Command Palette (Ctrl+Shift+P)
 luce.register_command("insert_skeleton", "Skeleton: Insert Basic Skeleton", insert_skel)
 luce.register_command("insert_header_skel", "Skeleton: Insert Header Skeleton", insert_header_skel)
 ```
 
 ---
 
-## Cykl życia wtyczki
+## Plugin Lifecycle
 
-Każdy skrypt Lua jest ładowany w osobnym, izolowanym środowisku `lua_State`. Oprócz kodu wykonywanego od razu przy starcie, wtyczka może opcjonalnie zaimplementować funkcje zwrotne:
+Each Lua script is loaded into an isolated `lua_State` VM. In addition to the code evaluated immediately on startup, a plugin can optionally define lifecycle callbacks:
 
-| Callback           | Kiedy jest wywoływany          | Zastosowanie |
-|--------------------|--------------------------------|--------------|
-| *Główny kod pliku* | Przy załadowaniu wtyczki       | Rejestracja komend i konfiguracja początkowa |
-| `on_tick(dt)`      | W każdej klatce renderowania   | Okresowe sprawdzanie warunków, timery (`dt` = sekundy) |
-| `on_shutdown()`    | Przed wyłączeniem edytora      | Zwalnianie zasobów lub zapisywanie stanu |
+| Callback           | When it runs                   | Purpose |
+|--------------------|--------------------------------|---------|
+| *Top-level code*   | When the plugin is loaded      | Command registration and initial setup |
+| `on_tick(dt)`      | Every render frame             | Periodic status checks, timers (`dt` = seconds) |
+| `on_shutdown()`    | Right before editor closes     | Resource cleanup or persisting state |
 
 ```lua
 function on_tick(dt)
-    -- Wywoływane co klatkę (np. do cyklicznych zadań w tle)
+    -- Called every frame (e.g. for background timers)
 end
 
 function on_shutdown()
-    luce.log("Wtyczka zwalnia zasoby przed zamknięciem Luce.")
+    luce.log("Plugin is cleaning up before Luce exits.")
 end
 ```
 
 ---
 
-## Podręczna ściągawka API
+## Handy API Cheat Sheet
 
-Najważniejsze funkcje udostępniane przez globalny obiekt `luce`:
+Core functions provided by the global `luce` table:
 
-### Rejestracja komend
+### Registering Commands
 ```lua
 luce.register_command(id, display_name, function() ... end)
 ```
 
-### Edycja tekstu
+### Text Editing
 ```lua
-luce.insert_text(text)       -- Wstawia tekst w miejscu kursora
-luce.delete_selection()      -- Usuwa aktualne zaznaczenie
-luce.get_selection()         -- Zwraca zaznaczony tekst (string)
-luce.get_line(n)             -- Zwraca tekst wiersza n (indeksowany od 0)
+luce.insert_text(text)       -- Insert text at cursor position
+luce.delete_selection()      -- Delete current text selection
+luce.get_selection()         -- Returns selected text (string)
+luce.get_line(n)             -- Returns line n text (0-indexed)
 ```
 
-### Kursor i plik
+### Cursor & File
 ```lua
-luce.get_cursor_line()       -- Numer aktualnej linii (indeksowany od 0)
-luce.get_cursor_column()     -- Numer kolumny (indeksowany od 0)
-luce.set_cursor(line, col)   -- Ustawia kursor na podane współrzędne
-luce.get_file_path()         -- Pełna ścieżka do aktywnego pliku
-luce.get_file_name()         -- Nazwa pliku z rozszerzeniem (np. main.cpp)
-luce.get_file_extension()    -- Rozszerzenie pliku bez kropki (np. cpp)
+luce.get_cursor_line()       -- Current line number (0-indexed)
+luce.get_cursor_column()     -- Current column number (0-indexed)
+luce.set_cursor(line, col)   -- Move cursor to line and column
+luce.get_file_path()         -- Full path to the active file
+luce.get_file_name()         -- File name with extension (e.g. main.cpp)
+luce.get_file_extension()    -- File extension without dot (e.g. cpp)
 ```
 
-### Powiadomienia, status i logowanie
+### Notifications, Status & Logging
 ```lua
 luce.show_notification(msg, type, duration) -- Toast ("info", "success", "warning", "error")
-luce.set_status(text)                       -- Wyświetla komunikat w pasku stanu
-luce.log(text)                              -- Log do konsoli [Lua Plugin INFO]
-luce.warn(text)                             -- Ostrzeżenie [Lua Plugin WARN]
+luce.set_status(text)                       -- Display text in the status bar
+luce.log(text)                              -- Log to terminal [Lua Plugin INFO]
+luce.warn(text)                             -- Warning to terminal [Lua Plugin WARN]
 ```
 
-> Pełny opis wszystkich typów i sygnatur parametrów znajdziesz w dokumencie **[Referencja API Lua](./api-reference)**.
+> For full parameter signatures and type documentation, see **[Lua API Reference](./api-reference)**.
 
 ---
 
-## Jak dodać nową wtyczkę do Luce?
+## How to Install a Plugin in Luce
 
-Aby dodać nową wtyczkę bez konieczności restartowania programu:
+To install and use a new plugin without restarting the editor:
 
-1. Otwórz edytor Luce i przejdź do zakładki **Plugins** (ikona puzzla na pasku aktywności).
-2. Kliknij przycisk **Open Plugins Folder** u dołu panelu — otworzy się katalog `plugins/` w menedżerze plików systemu.
-3. Skopiuj lub zapisz swój plik `.lua` w tym folderze.
-4. Kliknij przycisk **Reload Plugins** w edytorze.
-5. Twoja wtyczka natychmiast pojawi się na liście zainstalowanych wtyczek, a jej komendy będą dostępne w **Command Palette** (`Ctrl+Shift+P`).
+1. Open Luce and switch to the **Plugins** tab (puzzle icon in the Activity Bar).
+2. Click the **Open Plugins Folder** button at the bottom of the panel to open `plugins/` in your system file manager.
+3. Copy or save your `.lua` file into this folder.
+4. Click the **Reload Plugins** button in the editor.
+5. Your plugin will immediately appear in the list, and its commands will be ready in the **Command Palette** (`Ctrl+Shift+P`).

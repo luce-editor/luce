@@ -1,0 +1,30 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Themes & Styling": {
+    "message": "Motywy & Style",
+    "description": "The label for category 'Themes & Styling' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Plugin System": {
+    "message": "System Wtyczek",
+    "description": "The label for category 'Plugin System' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Interface & Layout": {
+    "message": "Interfejs i Układ",
+    "description": "The label for category 'Interface & Layout' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Syntax Highlighting": {
+    "message": "Podświetlanie Składni",
+    "description": "The label for category 'Syntax Highlighting' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.doc.Introduction & Quick Start": {
+    "message": "Wprowadzenie & Szybki Start",
+    "description": "The label for the doc item 'Introduction & Quick Start' in sidebar 'docsSidebar', linking to the doc intro"
+  },
+  "sidebar.docsSidebar.doc.Engine Architecture": {
+    "message": "Architektura Silnika",
+    "description": "The label for the doc item 'Engine Architecture' in sidebar 'docsSidebar', linking to the doc architecture"
+  }
+}

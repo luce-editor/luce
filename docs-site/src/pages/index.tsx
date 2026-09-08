@@ -25,7 +25,7 @@ function HomepageHeader() {
         </Heading>
         <p className="hero__subtitle">
           <Translate id="homepage.tagline">
-            Niezwykle szybki, minimalistyczny edytor kodu w C++23
+            Blazing-Fast, Minimalist Modern C++23 Code Editor
           </Translate>
         </p>
         <div className={styles.buttons} style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -33,21 +33,21 @@ function HomepageHeader() {
             className="button button--primary-luce button--lg"
             to="/docs/intro">
             <Translate id="homepage.getStarted">
-              Rozpocznij
+              Get Started
             </Translate>
           </Link>
           <Link
             className="button button--secondary-luce button--lg"
             to="/docs/themes/overview">
             <Translate id="homepage.exploreThemes">
-              Przeglądaj Motywy
+              Explore Themes
             </Translate>
           </Link>
           <Link
             className="button button--secondary-luce button--lg"
             to="/docs/plugins/architecture">
             <Translate id="homepage.pluginSdk">
-              SDK Wtyczek
+              Plugin SDK
             </Translate>
           </Link>
         </div>
@@ -60,8 +60,8 @@ export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={`${siteConfig.title} — Dokumentacja`}
-      description="Oficjalna dokumentacja i poradnik dewelopera dla edytora kodu Luce C++23.">
+      title={`${siteConfig.title} — Documentation`}
+      description="Official documentation and developer guides for the Luce C++23 code editor.">
       <HomepageHeader />
       <main>
         <HomepageFeatures />

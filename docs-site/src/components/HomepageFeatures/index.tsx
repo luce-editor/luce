@@ -23,84 +23,84 @@ const FeatureList: FeatureItem[] = [
   {
     title: (
       <Translate id="feature.speed.title">
-        Natywna Wydajność C++23
+        Native C++23 Performance
       </Translate>
     ),
     Icon: Zap,
     color: '#eab308',
     description: (
       <Translate id="feature.speed.desc">
-        Start poniżej sekundy, minimalne zużycie pamięci i błyskawiczna responsywność dzięki Dear ImGui, SDL2 i OpenGL 3.3.
+        Sub-second cold startup, minimal memory footprint, and instant responsiveness powered by Dear ImGui, SDL2, and OpenGL 3.3.
       </Translate>
     ),
   },
   {
     title: (
       <Translate id="feature.themes.title">
-        Silnik Motywów i Hot Reload
+        Theme Engine & Hot Reload
       </Translate>
     ),
     Icon: Palette,
     color: '#ec4899',
     description: (
       <Translate id="feature.themes.desc">
-        Twórz własne motywy w czytelnym formacie CSS z pełną paletą tokenów interfejsu i składni, przeładowywane na żywo.
+        Create custom themes in intuitive CSS syntax with full UI and syntax token control, reloaded instantly on save.
       </Translate>
     ),
   },
   {
     title: (
       <Translate id="feature.plugins.title">
-        Wtyczki w Języku Lua
+        Lua Plugin Ecosystem
       </Translate>
     ),
     Icon: Puzzle,
     color: '#10b981',
     description: (
       <Translate id="feature.plugins.desc">
-        Pisz lekkie, bezpieczne rozszerzenia w języku Lua 5.4 z bezpośrednim dostępem do buforów, poleceń i paska stanu.
+        Write lightweight, sandboxed extensions in Lua 5.4 with direct access to buffers, editor commands, and the status bar.
       </Translate>
     ),
   },
   {
     title: (
       <Translate id="feature.layout.title">
-        Układ Dokowania i Activity Bar
+        Docking Layout & Activity Bar
       </Translate>
     ),
     Icon: LayoutGrid,
     color: '#818cf8',
     description: (
       <Translate id="feature.layout.desc">
-        Elegancki poziomy pasek aktywności oraz elastyczna przestrzeń dokowania okien zapamiętywana między sesjami.
+        Clean horizontal activity bar with a flexible multi-panel docking workspace persisted seamlessly across sessions.
       </Translate>
     ),
   },
   {
     title: (
       <Translate id="feature.terminal.title">
-        Wbudowany Terminal Podprocesu
+        Embedded Subprocess Terminal
       </Translate>
     ),
     Icon: Terminal,
     color: '#38bdf8',
     description: (
       <Translate id="feature.terminal.desc">
-        Nieblokująca konsola terminala z dedykowanym polem wpisywania i automatycznym przewijaniem wprost w oknie edytora.
+        Non-blocking VT100 console tabs with dedicated input bars, process lifecycle management, and auto-scroll built directly into the editor.
       </Translate>
     ),
   },
   {
     title: (
       <Translate id="feature.lexers.title">
-        Wirtualne Przewijanie i Leksery
+        Virtual Scrolling & Fast Lexers
       </Translate>
     ),
     Icon: Code2,
     color: '#a855f7',
     description: (
       <Translate id="feature.lexers.desc">
-        Płynna edycja plików 100k+ linii w stałych 60+ FPS dzięki inkrementalnemu buforowaniu tokenów i natywnym lekserom.
+        Butter-smooth 60+ FPS navigation even in 100k+ line documents powered by per-line token caches and deterministic lexers.
       </Translate>
     ),
   },

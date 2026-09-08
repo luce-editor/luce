@@ -1,52 +1,52 @@
 ---
 id: architecture
-title: Architektura Systemu Pluginów
-sidebar_label: Architektura
+title: Plugin System Architecture
+sidebar_label: Architecture
 slug: /plugins/architecture
 ---
 
-# Architektura Systemu Pluginów
+# Plugin System Architecture
 
-Luce używa **Lua 5.4** jako silnika skryptowego dla pluginów. Każdy plugin to zwykły plik `.lua` — bez kompilacji, bez CMake, bez konfiguracji.
+Luce uses **Lua 5.4** as the scripting engine for plugins. Every plugin is a plain `.lua` file — no compilation, no CMake, no configuration.
 
 ---
 
-## Jak działa ładowanie pluginów
+## How Plugin Loading Works
 
-Przy każdym uruchomieniu `PluginManager` skanuje katalog `plugins/` leżący obok `luce.exe`. Każdy znaleziony plik `.lua` jest ładowany w osobnym, izolowanym środowisku Lua.
+On every startup, `PluginManager` scans the `plugins/` directory next to `luce.exe`. Each `.lua` file found is loaded into its own isolated Lua environment.
 
 ```
 build/Release/
 ├── luce.exe
 └── plugins/
-    ├── uppercase.lua     ← automatycznie załadowany
-    ├── timestamp.lua     ← automatycznie załadowany
-    └── moj_plugin.lua    ← automatycznie załadowany
+    ├── uppercase.lua     ← automatically loaded
+    ├── timestamp.lua     ← automatically loaded
+    └── my_plugin.lua     ← automatically loaded
 ```
 
 ---
 
-## Izolacja środowisk
+## Environment Isolation
 
-Każdy plugin otrzymuje **własny `lua_State`** (izolowane środowisko VM). Oznacza to:
+Each plugin gets its own **`lua_State`** (isolated VM). This means:
 
-- Błąd lub crash jednego skryptu nie wpływa na pozostałe.
-- Pluginy nie widzą nawzajem swoich zmiennych globalnych.
-- Każdy plugin ma własną kopię standardowej biblioteki Lua (`os`, `string`, `math`, `table` itp.).
+- A crash or error in one script does not affect others.
+- Plugins cannot see each other's global variables.
+- Each plugin has its own copy of the Lua standard library (`os`, `string`, `math`, `table`, etc.).
 
 ---
 
-## Rejestracja API
+## API Registration
 
-Po załadowaniu pliku, Luce automatycznie udostępnia globalną tabelę `luce` zawierającą pełne API edytora.
-Skrypt może wtedy wywołać `luce.register_command(...)` czy `luce.insert_text(...)` bez żadnych importów.
+After loading a file, Luce automatically provides a global `luce` table containing the full editor API.
+Scripts can call `luce.register_command(...)`, `luce.insert_text(...)`, etc. — no imports needed.
 
 ```
 lua_State (plugin A)          lua_State (plugin B)
 ┌──────────────────────┐      ┌──────────────────────┐
 │  luce.* API (C++)    │      │  luce.* API (C++)     │
 │  on_tick / on_shutdown│      │  on_tick / on_shutdown│
-│  zmienne globalne A  │      │  zmienne globalne B   │
+│  globals of plugin A │      │  globals of plugin B  │
 └──────────────────────┘      └──────────────────────┘
          │                              │
          └──────────┬───────────────────┘
@@ -58,21 +58,21 @@ lua_State (plugin A)          lua_State (plugin B)
 
 ---
 
-## Cykl życia pluginu
+## Plugin Lifecycle
 
-| Etap             | Co się dzieje                                                    |
-|------------------|------------------------------------------------------------------|
-| **Init**         | `luaL_dofile()` — plik `.lua` jest wykonywany od góry do dołu   |
-| **Rejestracja**  | Skrypt woła `luce.register_command(...)` podczas wykonania       |
-| **Tick**         | Luce woła globalną funkcję `on_tick(dt)` każdą klatkę (jeśli zdefiniowana) |
-| **Shutdown**     | Luce woła `on_shutdown()` przy zamykaniu, potem zamyka `lua_State` |
+| Stage        | What happens                                                        |
+|--------------|---------------------------------------------------------------------|
+| **Init**     | `luaL_dofile()` — the `.lua` file is executed top-to-bottom        |
+| **Register** | Script calls `luce.register_command(...)` during execution          |
+| **Tick**     | Luce calls global `on_tick(dt)` every frame (if defined)           |
+| **Shutdown** | Luce calls `on_shutdown()` on exit, then closes the `lua_State`    |
 
 ---
 
-## Instalacja pluginu
+## Installing a Plugin
 
-1. Napisz plik `.lua` implementujący plugin.
-2. Skopiuj go do folderu `plugins/` obok `luce.exe`.
-3. Zrestartuj Luce — plugin zostanie automatycznie załadowany.
+1. Write a `.lua` file implementing the plugin.
+2. Copy it into the `plugins/` folder next to `luce.exe`.
+3. Restart Luce — the plugin is loaded automatically.
 
-> Kliknij **"Open Plugins Folder"** w zakładce Plugins w sidebarze, aby szybko otworzyć ten folder w Eksploratorze Windows.
+> Click **"Open Plugins Folder"** in the Plugins tab of the sidebar to quickly open the folder in Windows Explorer.

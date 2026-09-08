@@ -1,33 +1,33 @@
 ---
 id: architecture
-title: Główna Architektura
-sidebar_label: Architektura
+title: Core Architecture
+sidebar_label: Architecture
 slug: /architecture
 ---
 
-# Architektura Edytora Luce
+# Luce Core Architecture
 
-Luce opiera się na ścisłej separacji warstw, efektywności pamięciowej zorientowanej na dane oraz renderowaniu interfejsu w trybie natychmiastowym (Immediate Mode).
+Luce is designed around strict separation of concerns, data-oriented memory efficiency, and immediate-mode UI rendering.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                       Główna Pętla                             │
-│                 (Pętla SDL2 + OpenGL 3.3)                      │
+│                           Main Loop                            │
+│                 (SDL2 Event Pump + OpenGL 3.3)                 │
 └───────────────────────────────┬────────────────────────────────┘
                                 │
                                 ▼
 ┌────────────────────────────────────────────────────────────────┐
-│                     Powłoka Aplikacji (UI)                     │
-│   ├── Poziomy Activity Bar (Eksplorator & Wtyczki)             │
-│   ├── Menedżer Kart (TabBar) & Przestrzeń Dokowania            │
-│   ├── Command Palette & Nakładka Wyszukiwania                  │
-│   └── Panel Wbudowanego Terminala                              │
+│                         App Shell (UI)                         │
+│   ├── Horizontal Activity Bar (File Explorer & Plugins)        │
+│   ├── TabBar & Docking Workspace                               │
+│   ├── Command Palette & Search Overlay                         │
+│   └── Embedded Terminal Panel                                  │
 └───────────────────────────────┬────────────────────────────────┘
                                 │
         ┌───────────────────────┼───────────────────────┐
         ▼                       ▼                       ▼
 ┌────────────────┐      ┌────────────────┐      ┌────────────────┐
-│ Silnik Edytora │      │ Silnik Składni │      │ Plugin Manager │
+│  Editor Engine │      │ Syntax Engine  │      │ Plugin Manager │
 │ ├── TextBuffer │      │ ├── Lexer C++  │      │ ├── Lua 5.4 VM  │
 │ ├── Undo/Redo  │      │ ├── Lexer Rust │      │ ├── lua_State[] │
 │ └── VirtualPos │      │ └── Line Cache │      │ └── luce.* API  │
@@ -36,37 +36,37 @@ Luce opiera się na ścisłej separacji warstw, efektywności pamięciowej zorie
 
 ---
 
-## 1. Separacja Warstw
+## 1. Separation of Layers
 
-- **`src/editor/`**: Przechowywanie dokumentu i edycja tekstu. `TextBuffer` odpowiada za wiersze i stosy cofania/ponawiania. `EditorView` odpowiada za wirtualne przewijanie, zawijanie tekstu, zaznaczenia i kursor.
-- **`src/syntax/`**: Stanowy silnik tokenizacji. Interfejs `Lexer` przetwarza tekst linijka po linijce, operując na stanach `LexerState`. `SyntaxHighlighter` zarządza pamięcią podręczną tokenów.
-- **`src/ui/`**: Komponenty Dear ImGui, zarządzanie motywami (`ThemeManager`), eksplorator plików, karty oraz paleta poleceń.
-- **`src/plugin/`**: Silnik skryptowy Lua 5.4. `PluginManager` skanuje folder `plugins/` i ładuje każdy plik `.lua` w osobnym, izolowanym `lua_State`. Tabela `luce.*` udostępnia pełne API edytora skryptom.
-- **`src/platform.*`**: Warstwa abstrakcji systemu operacyjnego dla okien dialogowych i potoków procesów.
+- **`src/editor/`**: Pure text document storage and editing logic. `TextBuffer` manages line storage, piece-table like mutations, and undo/redo stacks. `EditorView` handles line wrapping, virtual scrolling rendering, selection ranges, and cursor blink timers.
+- **`src/syntax/`**: Stateful tokenization engine. `Lexer` provides an abstract base class with single-line tokenization that accepts and returns an opaque `LexerState`. `SyntaxHighlighter` caches token spans per line and invalidates lines incrementally upon editing.
+- **`src/ui/`**: Immediate-mode Dear ImGui widgets, custom styles, Tab Bar manager, File Explorer tree, Command Palette, and Theme Manager.
+- **`src/plugin/`**: Lua 5.4 scripting engine. `PluginManager` scans the `plugins/` folder and loads each `.lua` file into its own isolated `lua_State`. The `luce.*` table exposes the full editor API to scripts.
+- **`src/platform.*`**: Operating system abstraction layer for native file dialogs, process pipes (`platform::Process`), and executable discovery.
 
 ---
 
-## 2. Wirtualne Przewijanie (Virtual Scrolling)
+## 2. Virtual Scrolling & Performance
 
-Przy plikach liczących 50 000+ linii iterowanie po każdym wierszu w każdej klatce powoduje drastyczne spadki płynności.
+In conventional naive UI architectures, iterating through a 50,000-line file every frame causes devastating lag.
 
-Luce rozwiązuje to poprzez **Virtual Scrolling**:
-1. `EditorView` odczytuje pozycję suwaka `ImGui::GetScrollY()` oraz wysokość widocznego okna.
-2. Wylicza zakres widocznych linii:
+Luce solves this using **Virtual Scrolling**:
+1. At the start of the frame, `EditorView` queries ImGui's scroll position `ImGui::GetScrollY()` and visible viewport height.
+2. It calculates the visible line window:
    ```
    StartLine = floor(ScrollY / LineHeight)
    EndLine   = StartLine + ceil(ViewportHeight / LineHeight) + 2
    ```
-3. Tylko linie w tym przedziale `[StartLine, EndLine]` są mierzone, tokenizowane i renderowane.
-4. Pozostałe setki tysięcy niewidocznych linii nie obciążają procesora ani karty graficznej.
+3. Only the lines within `[StartLine, EndLine]` are measured, tokenized, and rendered via `ImDrawList`.
+4. The remaining invisible document lines consume zero CPU and GPU cycles per frame.
 
 ---
 
-## 3. Stanowa Inkrementalna Analiza Składni
+## 3. Stateful Incremental Lexing
 
-Języki z konstrukcjami wieloliniowymi (np. komentarze blokowe `/* ... */`, surowe ciągi znaków `R"(...)"`) nie mogą być parsowane czysto bezstanowo wiersz po wierszu.
+Languages with multi-line constructs (e.g. block comments `/* ... */`, multi-line raw strings `R"(...)"`, multiline templates) cannot be parsed purely statelessly per line.
 
-Interfejs `Lexer` w Luce wymaga implementacji:
+Luce's `Lexer` interface requires each lexer to implement:
 
 ```cpp
 virtual LexerState TokenizeLine(
@@ -76,6 +76,6 @@ virtual LexerState TokenizeLine(
 ) = 0;
 ```
 
-`SyntaxHighlighter` śledzi stan `LexerState` zwracany na końcu każdej linii:
-- Jeśli linia `N` zostanie zmodyfikowana, tylko linie od `N` w dół są ponownie analizowane, dopóki stan `LexerState` nie zrówna się z wcześniej zapisanym stanem dla kolejnych linii.
-- Wszystkie nienaruszone linie są natychmiast pobierane z pamięci podręcznej tokenów.
+`SyntaxHighlighter` tracks the `LexerState` returned at the end of each line:
+- If line `N` is edited, only lines from `N` onward are re-lexed until the resulting `LexerState` matches the previously cached state for subsequent lines.
+- Lines that were unaffected are retrieved instantly from the per-line token cache.

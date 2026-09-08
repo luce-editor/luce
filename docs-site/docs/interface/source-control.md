@@ -1,196 +1,188 @@
 ---
 id: source-control
-title: Kontrola Wersji (Git)
-sidebar_label: Kontrola Wersji (Git)
+title: Source Control (Git)
+sidebar_label: Source Control (Git)
 slug: /interface/source-control
 ---
 
-# Kontrola Wersji (Git)
+# Source Control (Git)
 
-Luce posiada zaawansowaną, wbudowaną integrację z systemem kontroli wersji **Git**. Pozwala ona na pełne zarządzanie cyklem życia kodu — od tworzenia gałęzi i commitowania, przez zarządzanie schowkiem (stash), tagami i serwerami zdalnymi (remotes), aż po klonowanie repozytoriów i diagnostykę poleceń — bezpośrednio z poziomu edytora.
-
----
-
-## Architektura Asynchroniczna
-
-W odróżnieniu od wielu tradycyjnych edytorów, panel Source Control w Luce oparty jest na **dedykowanym wątku roboczym w tle (Worker Thread)** oraz mechanizmie **optymistycznych aktualizacji interfejsu (Optimistic UI Updates)**:
-
-- **Optymistyczna synchronizacja**: Zmiany w listach plików wyświetlają się natychmiastowo, podczas gdy operacje dyskowe Git wykonują się w tle, a ich wynik jest płynnie i bezpiecznie integrowany po zakończeniu.
-- **Automatyczne przeładowywanie z dysku**: Przełączenie gałęzi lub operacja `Pull` automatycznie odświeża zawartość wszystkich otwartych w edytorze kart (`TabBar`), zapobiegając nadpisaniu niespójnych danych.
+Luce features native, enterprise-grade **Git** version control integration, allowing you to manage your complete code lifecycle directly from the editor without switching to an external terminal. From branch switching, staging, and commit management to stashing, tagging, remote management, repository cloning, and real-time command diagnostics, Luce provides a seamless, modern developer experience.
 
 ---
 
-## Panel Source Control
+## 60 FPS Asynchronous Architecture & Optimistic Updates
 
-Panel kontroli wersji otworzysz, klikając ikonę Git w **Activity Barze** lub za pomocą skrótu z Command Palette: `View: Toggle Source Control`.
-
-### Nagłówek i Szybkie Akcje
-
-- **Przełącznik gałęzi (Branch Selector)**: Rozwijana lista prezentuje bieżącą gałąź i pozwala na natychmiastowe przełączenie się na inną lokalną gałąź lub otwarcie kreatora.
-- **Nowa gałąź (`+`)**: Szybkie przejście do modalnego okna zarządzania gałęziami.
-- **Odświeżenie (`↻`)**: Wymusza asynchroniczne przeskanowanie indeksu oraz drzewa roboczego.
-- **Menu Więcej Akcji (`···`)**: Otwiera kompleksowe menu wszystkich dostępnych operacji Git.
+Unlike many traditional editors, Luce's Source Control system is engineered on top of a **dedicated background worker thread** and **optimistic UI updates**:
+- **Zero UI Freezes (0 ms latency)**: Staging (`git add`), unstaging (`git restore --staged`), discarding, or switching branches will never stutter or block the Dear ImGui 60/144 FPS render loop.
+- **Optimistic Responsiveness**: Files move between staged and unstaged lists instantly (< 1 ms), while underlying Git filesystem tasks execute concurrently in the background and thread-safely reconcile their state upon completion.
+- **Automatic Disk Reload**: Switching branches or running `Pull` automatically reloads the disk contents of all open clean editor tabs (`TabBar`), ensuring your active buffers are always in sync with your Git working tree.
 
 ---
 
-## Menu „Więcej Akcji” (`···`)
+## Source Control Panel
 
-Rozwijane menu w prawym górnym rogu panelu oferuje kompletną hierarchię narzędzi:
+Open the Source Control panel by clicking the Git icon on the horizontal **Activity Bar** or pressing `Ctrl+Shift+P` and typing `View: Toggle Source Control`.
+
+### Header & Quick Actions
+
+- **Branch Dropdown (Combo)**: Displays the current active branch and allows instant switching to any local branch or launching the branch creation dialog.
+- **New Branch (`+`)**: Opens the branch management modal.
+- **Refresh (`↻`)**: Triggers an asynchronous background refresh of the index, remote tracking counters, and working tree.
+- **More Actions (`···`)**: Opens a comprehensive, VS Code-styled menu containing all available Git operations.
+
+---
+
+## „More Actions” Menu (`···`)
+
+The dropdown menu located in the top-right corner of the panel header provides a full hierarchy of Git commands:
 
 ```
-··· (Więcej Akcji)
-├── View as Tree (przełączanie widoku ścieżek: nazwa_pliku (katalog))
-├── Pull (pobranie i scalenie zmian ze zdalnego repozytorium)
-├── Push (wypchnięcie lokalnych commitów)
-├── Clone... (kreator klonowania nowego repozytorium)
-├── Checkout to... (szybkie przełączenie gałęzi)
-├── Fetch (pobranie najnowszych referencji)
+··· (More Actions)
+├── View as Tree (toggle file path display: filename (directory/path))
+├── Pull (fetch and merge changes from upstream)
+├── Push (publish and push local commits)
+├── Clone... (clone repository from remote URL)
+├── Checkout to... (switch to another local branch)
+├── Fetch (download remote tracking refs)
 ├── Commit >
-│   ├── Commit Staged (Amend)             [Wymaga potwierdzenia]
-│   └── Undo Last Commit (Soft)           [Wymaga potwierdzenia]
+│   ├── Commit Staged (Amend)             [Requires confirmation]
+│   └── Undo Last Commit (Soft)           [Requires confirmation]
 ├── Changes >
 │   ├── Stage All Changes
 │   ├── Unstage All Changes
-│   └── Discard All Changes               [Wymaga potwierdzenia]
+│   └── Discard All Changes               [Requires confirmation]
 ├── Pull, Push >
 │   ├── Pull
 │   ├── Push
-│   ├── Push (Force)                      [Wymaga potwierdzenia]
+│   ├── Push (Force)                      [Requires confirmation]
 │   └── Push (Tags)
 ├── Branch >
 │   ├── Switch Branch...
 │   ├── Create Branch...
 │   ├── Rename Branch...
-│   ├── Delete Branch...                  [Wymaga potwierdzenia]
-│   └── Merge Branch...                   [Wymaga potwierdzenia]
+│   ├── Delete Branch...                  [Requires confirmation]
+│   └── Merge Branch...                   [Requires confirmation]
 ├── Remote >
 │   ├── Add Remote...
-│   ├── Manage Remotes...                 [Usuwanie wymaga potwierdzenia]
+│   ├── Manage Remotes...                 [Removal requires confirmation]
 │   └── Fetch (Prune)
 ├── Stash >
 │   ├── Stash (Include Untracked)
 │   ├── Stash (Keep Staged)
 │   ├── Pop Latest Stash
 │   ├── Apply Latest Stash
-│   └── View / Manage Stashes...          [Usuwanie wymaga potwierdzenia]
+│   └── View / Manage Stashes...          [Drop requires confirmation]
 ├── Tags >
 │   ├── Create Tag...
-│   ├── Manage Tags...                    [Usuwanie wymaga potwierdzenia]
+│   ├── Manage Tags...                    [Deletion requires confirmation]
 │   └── Push Tags
-└── Show Git Output                       [Konsola poleceń Git na żywo]
+└── Show Git Output                       [Real-time Git command log]
 ```
 
 ---
 
-## Bezpieczeństwo: Modalne Potwierdzenia Akcji
+## Safety First: Centered Confirmation Modals
 
-Przed wykonaniem jakiejkolwiek **potencjalnie niszczącej akcji** lub modyfikacji historii repozytorium edytor wyświetla wycentrowane **modalne okno potwierdzenia** (*Confirm Action Modal*):
-- Okno blokuje interfejs, uniemożliwiając przypadkowe kliknięcie w tle.
-- Wyraźnie opisuje konsekwencje operacji (np. nieodwracalną utratę niezacommitowanych danych w plikach).
-- Przycisk akcji (w kolorze ostrzegawczym/czerwonym) oraz przycisk *Cancel* mają zbalansowaną szerokość i wypełniają 100% dolnego paska okna.
+Before performing any **destructive or history-altering action**, Luce displays a centered, focused **Confirmation Modal Dialog**:
+- The modal window is centered precisely in the middle of your screen and blocks the parent workspace from accidental input.
+- Clearly states the consequences (e.g. permanent loss of uncommitted work).
+- The action button (highlighted in red or amber) and the *Cancel* button each take 50% width, filling **100% of the bottom row** for ergonomic, balanced interaction.
 
-### Akcje objęte potwierdzeniem:
-1. **Discard All Changes**: Odrzucenie wszystkich zmian roboczych (`git restore .`).
-2. **Discard Single File (`↺`)**: Odrzucenie zmian w pojedynczym pliku.
-3. **Force Push**: Wymuszone nadpisanie historii zdalnej gałęzi (`git push --force`).
-4. **Delete Branch**: Usunięcie gałęzi (w tym wymuszone usunięcie `-D` niescalonych commitów).
-5. **Merge Branch**: Scalenie innej gałęzi do bieżącej.
-6. **Undo Last Commit (Soft)**: Cofnięcie ostatniego commita z zachowaniem zmian w indeksie (`git reset --soft HEAD~1`).
-7. **Commit Amend**: Nadpisanie poprzedniego commita bieżącymi zmianami.
-8. **Drop Stash**: Trwałe usunięcie schowka stash.
-9. **Delete Tag**: Usunięcie tagu wersji.
-10. **Remove Remote**: Usunięcie skonfigurowanego serwera zdalnego.
-
----
-
-## Zaawansowane Okna Dialogowe (Modals)
-
-Wszystkie okna dialogowe w Luce pojawiają się **dokładnie na środku ekranu** i są w pełni responsywne.
-
-### 1. Zarządzanie Gałęziami (`Git Branches`)
-Dostępne po kliknięciu nazwy gałęzi lub z menu:
-- **Switch & Create**: Szybka wyszukiwarka/filtr gałęzi z natychmiastowym przełączaniem oraz formularz tworzenia nowej gałęzi (`git checkout -b`).
-- **Rename**: Wybór gałęzi z listy rozwijanej i zmiana jej nazwy (`git branch -m`).
-- **Delete**: Bezpieczne usuwanie gałęzi z opcjonalnym przełącznikiem *Force Delete (-D)*.
-- **Merge**: Wybór gałęzi do scalenia z aktualnie aktywną gałęzią roboczą (`git merge`).
-
-### 2. Zarządzanie Serwerami Zdalnymi (`Git Remotes`)
-- Formularz dodawania nowego serwera: nazwa (domyślnie `origin`) oraz adres URL (HTTPS/SSH).
-- Przeglądanie listy podpiętych serwerów zdalnych wraz z ich adresami oraz opcją bezpiecznego usunięcia.
-
-### 3. Zarządzanie Schowkiem (`Git Stash`)
-- **Tworzenie schowka**: Pole na opcjonalny opis oraz przełączniki:
-  - `Include untracked (-u)` — dołącza do schowka nowe, nieśledzone pliki.
-  - `Keep index` — zachowuje pliki przygotowane w indeksie (staged).
-- **Lista schowków**: Przeglądanie zapisanych stanów (`stash@{0}`, `stash@{1}`) z możliwością:
-  - **Apply**: Przywrócenie zmian bez usuwania schowka.
-  - **Pop**: Przywrócenie zmian i jednoczesne usunięcie wpisu ze schowka.
-  - **Drop**: Trwałe skasowanie schowka (z potwierdzeniem).
-
-### 4. Tagi Wersji (`Git Tags`)
-- **Tworzenie tagu**: Nazwa tagu (np. `v1.2.0`) oraz opcjonalna wiadomość annotacji.
-- **Lista tagów**: Przeglądanie tagów, ich usuwanie oraz przycisk *Push All Tags to Remote* do wysłania wszystkich tagów na serwer zdalny.
-
-### 5. Klonowanie Repozytorium (`Clone Repository`)
-- Formularz klonowania:
-  - Adres URL repozytorium (np. `https://github.com/user/project.git`).
-  - Ścieżka docelowa wraz z natywnym selektorem folderów systemowych (**Browse...**).
-- Po pomyślnym sklonowaniu edytor automatycznie konfiguruje i otwiera pobrane repozytorium jako aktywny obszar roboczy (aktualizując Eksplorator Plików, wbudowany terminal oraz panel Git).
-
-### 6. Podgląd Działań Git (`Git Output`)
-- Wbudowane okno inspekcji prezentujące pełną historię poleceń Git uruchamianych w tle przez Luce.
-- Każdy wpis zawiera:
-  - Dokładny znacznik czasu `[GG:MM:SS]`.
-  - Treść polecenia (np. `git status --porcelain=v1 -uall`).
-  - Status wykonania: `[ok]` lub `[exit code]`.
-  - Pełną treść zwróconą przez Git (stdout / stderr).
-- Przyciski **Copy All** (kopiowanie całego logu do schowka) oraz **Clear Output**.
+### Actions Requiring Confirmation:
+1. **Discard All Changes**: Discard all working tree modifications (`git restore .`).
+2. **Discard Single File (`↺`)**: Discard local changes in a specific file.
+3. **Force Push**: Overwrite remote branch history (`git push --force`).
+4. **Delete Branch**: Delete a local branch (with an option for Force Delete `-D`).
+5. **Merge Branch**: Merge another branch into the currently checked-out branch.
+6. **Undo Last Commit (Soft)**: Reset HEAD by 1 commit while keeping all changes staged (`git reset --soft HEAD~1`).
+7. **Commit Amend**: Amend previous commit with current staged changes (`git commit --amend`).
+8. **Drop Stash**: Permanently discard a saved stash.
+9. **Delete Tag**: Delete a version tag (`git tag -d`).
+10. **Remove Remote**: Remove a configured remote repository.
 
 ---
 
-## Synchronizacja: Push & Pull
+## Dedicated Modals & Dialogs
 
-Poniżej nagłówka panelu znajdują się dedykowane przyciski synchronizacji z dynamicznymi licznikami:
-- **Push**: Wyświetla liczbę lokalnych commitów oczekujących na wypchnięcie, np. `Push  ↑2`.
-- **Pull**: Wyświetla liczbę commitów dostępnych na serwerze do pobrania, np. `Pull  ↓1`.
+All dialogs in Luce appear **dead-center** in your viewport with responsive layouts:
 
-:::tip Automatyczny Kreator Remote
-Jeśli repozytorium nie ma jeszcze skonfigurowanego serwera zdalnego `origin`, kliknięcie przycisku **Push** automatycznie otworzy okno konfiguracji serwera zdalnego i po podaniu adresu natychmiast wypchnie gałąź z powiązaniem nadrzędnym (`git push -u origin <branch>`).
+### 1. Branch Management (`Git Branches`)
+- **Switch & Create**: Interactive filter box with real-time branch searching, one-click checkout, and a *Create New Branch* form (`git checkout -b`).
+- **Rename**: Select any local branch from the dropdown and rename it (`git branch -m`).
+- **Delete**: Select branch with optional *Force Delete (-D)* checkbox and safety confirmation.
+- **Merge**: Select another branch to merge into your active branch (`git merge`).
+
+### 2. Remote Management (`Git Remotes`)
+- **Add Remote**: Input remote name (default `origin`) and repository URL (HTTPS or SSH).
+- **Configured Remotes**: List of active remotes with their URLs and a *Remove* action.
+
+### 3. Stash Management (`Git Stash`)
+- **Save Stash**: Add an optional descriptive message, with options to `Include untracked (-u)` and `Keep index (keep staged)`.
+- **Existing Stashes**: Scrollable list of `stash@{0}`, `stash@{1}`, etc., with actions:
+  - **Apply**: Restore changes without removing the stash entry.
+  - **Pop**: Apply changes and immediately delete the stash entry.
+  - **Drop**: Permanently discard the stash entry (with confirmation).
+
+### 4. Tag Management (`Git Tags`)
+- **Create Tag**: Specify tag name (e.g. `v1.0.0`) and optional annotation message.
+- **Existing Tags**: List of local tags with individual delete actions and a *Push All Tags to Remote* button (`git push --tags`).
+
+### 5. Clone Repository (`Clone Repository`)
+- Input repository URL and target destination.
+- Includes a native folder picker button (**Browse...**).
+- Once cloning completes, Luce automatically sets the directory as the active workspace, updating the File Explorer, embedded terminal, and Git status.
+
+### 6. Git Output Console (`Git Output`)
+- Real-time scrollable log of every Git command invoked by Luce.
+- Shows timestamp `[HH:MM:SS]`, exact command arguments, exit status code (`[ok]` or `[exit code]`), and full stdout / stderr output.
+- Features **Copy All** (copies entire session log to clipboard) and **Clear Output**.
+
+---
+
+## Synchronization: Push & Pull
+
+Below the header, the panel offers dedicated Push and Pull buttons with real-time commit counter badges:
+- **Push**: Shows local commits waiting to be pushed, e.g. `Push  ↑2`.
+- **Pull**: Shows remote commits waiting to be pulled, e.g. `Pull  ↓1`.
+
+:::tip Automatic Remote Setup
+If your repository does not have an `origin` remote configured, clicking **Push** automatically opens the remote setup dialog and immediately pushes with tracking (`git push -u origin <branch>`).
 :::
 
 ---
 
-## Przygotowywanie Zmian i Commitowanie
+## Staging & Committing
 
-1. **Commit Message**: Wpisz wiadomość w polu tekstowym i użyj skrótu **Ctrl+Enter** (lub przycisku *Commit*).
-2. **Staged Changes**: Lista plików w indeksie z oznaczeniami kolorystycznymi (`A` – dodany, `M` – zmodyfikowany, `D` – usunięty).
-3. **Changes**: Lista plików w katalogu roboczym. Kliknięcie `+` przenosi do indeksu, a kliknięcie `↺` cofa zmiany po potwierdzeniu.
-4. **View as Tree**: Włączenie tej opcji w menu `···` zmienia format wyświetlania plików na bardziej czytelny: `plik.cpp (src/editor)`.
+1. **Commit Message**: Type your commit message into the input field and press **Ctrl+Enter** (or click *Commit*).
+2. **Staged Changes**: View staged files with color-coded status badges (`A` – added, `M` – modified, `D` – deleted). Unstage individual files or all files at once.
+3. **Changes**: View unstaged modifications. Click `+` to stage or `↺` to discard (with confirmation).
+4. **View as Tree**: Toggle in the `···` menu to render file paths as `filename.cpp (path/to/folder)` for improved legibility.
 
 ---
 
-## Dostępne Komendy w Palecie Poleceń (`Ctrl+Shift+P`)
+## Available Command Palette Entries (`Ctrl+Shift+P`)
 
-Wszystkie operacje Git można wywołać bezpośrednio z Command Palette:
+All Git operations can be triggered from the Command Palette:
 
-| Komenda w Command Palette | Identyfikator | Opis |
+| Command Palette Entry | Command ID | Description |
 |---|---|---|
-| `View: Toggle Source Control` | `view.toggle_source_control` | Otwiera lub ukrywa panel Source Control |
-| `Git: Refresh Status` | `git.refresh` | Wymusza asynchroniczne odświeżenie statusu |
-| `Git: Switch / Checkout Branch...` | `git.branch.switch` | Otwiera okno wyboru i przełączania gałęzi |
-| `Git: Create New Branch...` | `git.branch.create` | Otwiera kreator tworzenia nowej gałęzi |
-| `Git: Manage Branches...` | `git.branch.manage` | Otwiera pełne okno gałęzi (zmiana nazwy, usuwanie, scalanie) |
-| `Git: Push` | `git.push` | Wypycha commity na serwer zdalny |
-| `Git: Push (Force)` | `git.push_force` | Wymuszone wypchnięcie zmian z potwierdzeniem |
-| `Git: Pull` | `git.pull` | Pobiera i scala zmiany z serwera zdalnego |
-| `Git: Add Remote Repository...` | `git.remote.add` | Otwiera okno dodawania serwera zdalnego |
-| `Git: Manage Remotes...` | `git.remote.manage` | Otwiera okno zarządzania serwerami zdalnymi |
-| `Git: Stage All Changes` | `git.stage_all` | Dodaje wszystkie zmodyfikowane pliki do indeksu |
-| `Git: Unstage All Changes` | `git.unstage_all` | Wycofuje wszystkie pliki z indeksu |
-| `Git: Discard All Changes` | `git.discard_all` | Odrzuca wszystkie niezacommitowane zmiany (z potwierdzeniem) |
-| `Git: Stash (Include Untracked)` | `git.stash.save` | Zapisuje zmiany robocze w schowku |
-| `Git: Pop Latest Stash` | `git.stash.pop` | Przywraca i usuwa ostatni schowek |
-| `Git: Manage Stashes...` | `git.stash.manage` | Otwiera okno zarządzania schowkami |
-| `Git: Manage Tags...` | `git.tag.manage` | Otwiera okno zarządzania tagami |
-| `Git: Clone Repository...` | `git.clone` | Otwiera kreator klonowania repozytorium |
-| `Git: Show Git Output Log` | `git.output` | Otwiera okno podglądu logów Git |
+| `View: Toggle Source Control` | `view.toggle_source_control` | Opens or closes the Git sidebar view |
+| `Git: Refresh Status` | `git.refresh` | Triggers an asynchronous status refresh |
+| `Git: Switch / Checkout Branch...` | `git.branch.switch` | Opens the branch selection modal |
+| `Git: Create New Branch...` | `git.branch.create` | Opens the new branch creation modal |
+| `Git: Manage Branches...` | `git.branch.manage` | Opens the full branch management modal |
+| `Git: Push` | `git.push` | Pushes local commits to the remote |
+| `Git: Push (Force)` | `git.push_force` | Force pushes to the remote with confirmation |
+| `Git: Pull` | `git.pull` | Pulls and merges changes from the remote |
+| `Git: Add Remote Repository...` | `git.remote.add` | Opens the Add Remote dialog |
+| `Git: Manage Remotes...` | `git.remote.manage` | Opens the remote repository manager |
+| `Git: Stage All Changes` | `git.stage_all` | Stages all modified and untracked files |
+| `Git: Unstage All Changes` | `git.unstage_all` | Unstages all files from the index |
+| `Git: Discard All Changes` | `git.discard_all` | Discards all working tree changes with confirmation |
+| `Git: Stash (Include Untracked)` | `git.stash.save` | Saves working tree changes to stash |
+| `Git: Pop Latest Stash` | `git.stash.pop` | Applies and deletes the latest stash |
+| `Git: Manage Stashes...` | `git.stash.manage` | Opens the stash manager modal |
+| `Git: Manage Tags...` | `git.tag.manage` | Opens the tag manager modal |
+| `Git: Clone Repository...` | `git.clone` | Opens the Clone Repository wizard |
+| `Git: Show Git Output Log` | `git.output` | Opens the real-time Git Output log |

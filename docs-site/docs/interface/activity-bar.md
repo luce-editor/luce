@@ -1,20 +1,20 @@
 ---
 id: activity-bar
-title: Poziomy Activity Bar i Pasek Boczny
-sidebar_label: Activity Bar & Pasek Boczny
+title: Horizontal Activity Bar & Sidebar
+sidebar_label: Activity Bar & Sidebar
 slug: /interface/activity-bar
 ---
 
-# Poziomy Activity Bar i Pasek Boczny
+# Horizontal Activity Bar & Sidebar
 
-W odróżnieniu od klasycznych edytorów marnujących miejsce na szeroki pionowy pas po lewej stronie, Luce integruje **poziomy pasek Activity Bar** bezpośrednio na górze lewego panelu.
+Luce features a sleek, unified **Horizontal Activity Bar** embedded seamlessly into the top of the Sidebar panel.
 
 ---
 
-## Dostępne Zakładki
+## Available Tabs
 
-- **Eksplorator Plików**: Drzewo katalogów otwartego projektu z dynamicznym filtrem wyszukiwania i ikonami typów plików.
-- **Kontrola Wersji (Git)**: Pełny panel zarządzania repozytorium (odświeżanie, gałąź, commitowanie, stage/unstage, discard zmian).
-- **Wtyczki (Plugins)**: Lista załadowanych skryptów Lua wraz z nazwą, wersją, autorem i opisem. Przycisk *"Reload Plugins"* (oraz ikona `↻` w nagłówku) ponownie skanuje folder i ładuje nowe oraz zmodyfikowane wtyczki w locie. Przycisk *"Open Plugins Folder"* otwiera folder `plugins/` w Eksploratorze Windows. Wtyczki można odładować klikając ikonę kosza (plik `.lua` pozostaje na dysku).
-- **Wskaźnik Aktywności**: Subtelna niebieska linia podkreślająca aktywny widok.
-- **Zwijanie Paska**: Ponowne kliknięcie aktywnej ikony natychmiastowo chowa pasek boczny.
+- **Explorer Tab**: Displays the recursive directory tree of the currently opened project workspace with dynamic search filter and file type icons.
+- **Source Control (Git) Tab**: Full repository management including status scanning, branch tracking, staging/unstaging, discard changes, and commits.
+- **Plugins Tab**: Displays loaded Lua scripts, metadata (name, version, author), and provides a *"Reload Plugins"* button (and header `↻` icon) to re-scan the plugins folder and reload all scripts on the fly. You can also open the `plugins/` directory in Windows Explorer or unload plugins by clicking the trash icon.
+- **Active Indicator**: An accent indicator bar renders underneath the currently selected activity.
+- **Instant Toggle**: Clicking an active icon again collapses the sidebar, giving you full-screen editor space.

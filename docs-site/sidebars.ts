@@ -5,16 +5,16 @@ const sidebars: SidebarsConfig = {
     {
       type: 'doc',
       id: 'intro',
-      label: 'Wprowadzenie & Szybki Start',
+      label: 'Introduction & Quick Start',
     },
     {
       type: 'doc',
       id: 'architecture',
-      label: 'Architektura Silnika',
+      label: 'Engine Architecture',
     },
     {
       type: 'category',
-      label: 'Motywy & Style',
+      label: 'Themes & Styling',
       collapsible: true,
       collapsed: false,
       items: [
@@ -24,7 +24,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'System Wtyczek',
+      label: 'Plugin System',
       collapsible: true,
       collapsed: false,
       items: [
@@ -35,7 +35,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Interfejs i Układ',
+      label: 'Interface & Layout',
       collapsible: true,
       collapsed: false,
       items: [
@@ -49,7 +49,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Podświetlanie Składni',
+      label: 'Syntax Highlighting',
       collapsible: true,
       collapsed: false,
       items: [

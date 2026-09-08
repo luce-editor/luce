@@ -1,30 +1,30 @@
 ---
 id: overview
-title: Interfejs i Układ Okien
-sidebar_label: Przegląd
+title: Interface & Layout
+sidebar_label: Overview
 slug: /interface/overview
 ---
 
-# Zarządzanie Interfejsem i Układ Okien
+# Interface & Layout Management
 
-Interfejs Luce bazuje na silniku **Dear ImGui (gałąź docking)** wzbogaconym o minimalistyczny styl nowoczesnych edytorów kodu.
-
----
-
-## Główne Obszary Robocze
-
-1. **Pasek Menu**: Zarządzanie plikami, edycją, widokiem, motywami oraz narzędziami.
-2. **Pasek Boczny (Sidebar)**: Zintegrowany z poziomym Activity Barem (drzewo katalogów oraz wtyczki).
-3. **Menedżer Kart & Edytor**: Płynne otwieranie wielu plików, dzielenie widoku w pionie/poziomie, podgląd Markdown na żywo oraz podgląd obrazów.
-4. **Dolny Panel Wielozadaniowy**:
-   - **Problems (Problemy)**: Centralna lista wykrytych błędów i ostrzeżeń w projekcie. Podwójne kliknięcie dowolnego problemu natychmiast otwiera odpowiedni plik i przenosi kursor bezpośrednio do wskazanej linii.
-   - **Output (Wyjście)**: Dedykowana konsola wyjściowa procesów i narzędzi.
-   - **Terminal**: Wbudowane taby terminala z emulacją VT100 i wsparciem dla PowerShell/Bash.
-5. **Pasek Stanu**: Informacje o języku, pozycji kursora, kodowaniu, wcięciach i wersji edytora.
+Luce's interface is built on **Dear ImGui (docking branch)** combined with the minimalist aesthetic of modern code editors.
 
 ---
 
-## Zapamiętywanie Układu (Docking) i Stanu Sesji
+## Workspace Areas
 
-- **Układ okien**: Pozycje i rozmiary zadokowanych paneli są automatycznie zapisywane do pliku `imgui.ini`.
-- **Sesja projektu**: Otwarty katalog główny, lista aktywnych kart plików oraz skala interfejsu są automatycznie zapamiętywane w `session.json` i przywracane przy ponownym uruchomieniu edytora.
+1. **Menu Bar**: Global actions for files, editing, view toggles, themes, and developer tools.
+2. **Sidebar**: Features a horizontal Activity Bar switching between the File Explorer tree and loaded Lua Plugins.
+3. **Tab Bar & Editor**: Multi-file editing tabs, horizontal/vertical splits, real-time Markdown preview (`Ctrl+Shift+M`), and built-in image viewer.
+4. **Bottom Dock Panel**:
+   - **Problems**: Central diagnostic table displaying workspace errors and warnings. Double-clicking any problem instantly opens the source file and navigates directly to the specified line.
+   - **Output**: Dedicated read-only output logs from tools and background jobs.
+   - **Terminal**: Embedded multi-tab terminal with VT100 emulation and PowerShell/Bash integration.
+5. **Status Bar**: Live diagnostics including language mode, cursor position (Ln, Col), file encoding, indentation style, and application version.
+
+---
+
+## Docking & Session Persistence
+
+- **Panel Docking**: Window arrangements and docking states are preserved in `imgui.ini`.
+- **Workspace Sessions**: The open folder, active tabs, and interface scaling factor are automatically saved to `session.json` and restored seamlessly on startup.
