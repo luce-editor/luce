@@ -50,9 +50,20 @@ set(VTERM_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libvterm)
 
 # libvterm doesn't have a CMakeLists.txt, so we create a static library for it manually
+set(VTERM_ENCODING_DIR "${libvterm_SOURCE_DIR}/src/encoding")
+file(MAKE_DIRECTORY "${VTERM_ENCODING_DIR}")
+
+if(NOT EXISTS "${VTERM_ENCODING_DIR}/DECdrawing.inc")
+    file(WRITE "${VTERM_ENCODING_DIR}/DECdrawing.inc" "static const struct StaticTableEncoding encoding_DECdrawing = {\n  { .decode = &decode_table },\n  {\n    [0x60] = 0x25C6,\n    [0x61] = 0x2592,\n    [0x62] = 0x2409,\n    [0x63] = 0x240C,\n    [0x64] = 0x240D,\n    [0x65] = 0x240A,\n    [0x66] = 0x00B0,\n    [0x67] = 0x00B1,\n    [0x68] = 0x2424,\n    [0x69] = 0x240B,\n    [0x6a] = 0x2518,\n    [0x6b] = 0x2510,\n    [0x6c] = 0x250C,\n    [0x6d] = 0x2514,\n    [0x6e] = 0x253C,\n    [0x6f] = 0x23BA,\n    [0x70] = 0x23BB,\n    [0x71] = 0x2500,\n    [0x72] = 0x23BC,\n    [0x73] = 0x23BD,\n    [0x74] = 0x251C,\n    [0x75] = 0x2524,\n    [0x76] = 0x2534,\n    [0x77] = 0x252C,\n    [0x78] = 0x2502,\n    [0x79] = 0x2A7D,\n    [0x7a] = 0x2A7E,\n    [0x7b] = 0x03C0,\n    [0x7c] = 0x2260,\n    [0x7d] = 0x00A3,\n    [0x7e] = 0x00B7,\n  }\n};\n")
+endif()
+
+if(NOT EXISTS "${VTERM_ENCODING_DIR}/uk.inc")
+    file(WRITE "${VTERM_ENCODING_DIR}/uk.inc" "static const struct StaticTableEncoding encoding_uk = {\n  { .decode = &decode_table },\n  {\n    [0x23] = 0x00a3,\n  }\n};\n")
+endif()
+
 file(GLOB VTERM_SOURCES ${libvterm_SOURCE_DIR}/src/*.c)
 add_library(vterm STATIC ${VTERM_SOURCES})
-target_include_directories(vterm PUBLIC ${libvterm_SOURCE_DIR}/include)
+target_include_directories(vterm PUBLIC ${libvterm_SOURCE_DIR}/include ${libvterm_SOURCE_DIR}/src)
 target_compile_definitions(vterm PRIVATE -D_CRT_SECURE_NO_WARNINGS)
 
 # Dear ImGui (docking branch) — immediate-mode UI with dockable panels
