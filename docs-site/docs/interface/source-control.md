@@ -161,6 +161,24 @@ If your repository does not have an `origin` remote configured, clicking **Push*
 
 ---
 
+## Git Gutter (Margin Indicators)
+
+As you edit code, Luce automatically calculates line-by-line diffs against the repository `HEAD` and displays vibrant indicators on the left line-number margin:
+- **Green Bar**: New lines added to the file.
+- **Blue Bar**: Lines modified compared to the committed version.
+- **Red Triangle**: Deleted lines marker positioned precisely where deletions occurred.
+The markers refresh automatically in the background during active typing and upon file save.
+
+---
+
+## Visual Unified Diff Viewer
+
+Click the **Diff** button next to any changed or staged file in the Source Control panel, or trigger `Git: View File Diff` from the Command Palette:
+- **Syntax Highlighted Diff**: Additions (`+`) are highlighted in soft green with green backgrounds, deletions (`-`) in red with red backgrounds, and hunk headers (`@@`) in bright cyan.
+- **File Header & Direct Actions**: View full file path, refresh the diff, or stage the file directly from within the modal window.
+
+---
+
 ## Available Command Palette Entries (`Ctrl+Shift+P`)
 
 All Git operations can be triggered from the Command Palette:
@@ -168,6 +186,7 @@ All Git operations can be triggered from the Command Palette:
 | Command Palette Entry | Command ID | Description |
 |---|---|---|
 | `View: Toggle Source Control` | `view.toggle_source_control` | Opens or closes the Git sidebar view |
+| `Git: View File Diff` | `git.view_diff` | Opens the Visual Diff Viewer modal for the active file |
 | `Git: Refresh Status` | `git.refresh` | Triggers an asynchronous status refresh |
 | `Git: Switch / Checkout Branch...` | `git.branch.switch` | Opens the branch selection modal |
 | `Git: Create New Branch...` | `git.branch.create` | Opens the new branch creation modal |

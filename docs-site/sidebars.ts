@@ -9,6 +9,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'doc',
+      id: 'installation',
+      label: 'Installation & Setup',
+    },
+    {
+      type: 'doc',
       id: 'architecture',
       label: 'Engine Architecture',
     },
@@ -45,6 +50,7 @@ const sidebars: SidebarsConfig = {
         'interface/diagnostics',
         'interface/terminal',
         'interface/command-palette',
+        'interface/keyboard-shortcuts',
       ],
     },
     {

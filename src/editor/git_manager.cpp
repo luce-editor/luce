@@ -238,6 +238,107 @@ char GitManager::GetFileStatusCode(const std::string& rel_or_abs_path) const {
     return '\0';
 }
 
+GitFileDiffMarks GitManager::GetFileDiffMarks(const std::string& rel_or_abs_path) const {
+    GitFileDiffMarks marks;
+    if (repo_path_.empty()) return marks;
+
+    std::string norm = NormalizePath(rel_or_abs_path);
+    if (!repo_path_.empty() && norm.starts_with(repo_path_)) {
+        norm = norm.substr(repo_path_.length());
+        if (!norm.empty() && norm[0] == '/') norm = norm.substr(1);
+    }
+    if (norm.empty()) return marks;
+
+    auto res = RunGit("diff HEAD -U0 -- \"" + norm + "\"");
+    if (res.exit_code != 0 || res.output.empty()) {
+        res = RunGit("diff -U0 -- \"" + norm + "\"");
+    }
+
+    if (res.output.empty()) {
+        return marks;
+    }
+
+    std::istringstream iss(res.output);
+    std::string line;
+    while (std::getline(iss, line)) {
+        if (!line.starts_with("@@")) continue;
+        size_t plus_pos = line.find('+');
+        size_t minus_pos = line.find('-');
+        if (plus_pos == std::string::npos || minus_pos == std::string::npos) continue;
+
+        int old_start = 0, old_count = 1;
+        int new_start = 0, new_count = 1;
+
+        std::string old_part = line.substr(minus_pos + 1, plus_pos - (minus_pos + 1));
+        size_t comma = old_part.find(',');
+        if (comma != std::string::npos) {
+            old_start = std::atoi(old_part.substr(0, comma).c_str());
+            old_count = std::atoi(old_part.substr(comma + 1).c_str());
+        } else {
+            old_start = std::atoi(old_part.c_str());
+        }
+
+        size_t end_hunk = line.find("@@", plus_pos);
+        if (end_hunk == std::string::npos) continue;
+        std::string new_part = line.substr(plus_pos + 1, end_hunk - (plus_pos + 1));
+        while (!new_part.empty() && new_part.back() == ' ') new_part.pop_back();
+        comma = new_part.find(',');
+        if (comma != std::string::npos) {
+            new_start = std::atoi(new_part.substr(0, comma).c_str());
+            new_count = std::atoi(new_part.substr(comma + 1).c_str());
+        } else {
+            new_start = std::atoi(new_part.c_str());
+        }
+
+        if (new_count == 0) {
+            int target_line = (new_start > 0) ? (new_start - 1) : 0;
+            marks.lines[target_line] = GitLineDiffType::Deleted;
+        } else if (old_count == 0) {
+            for (int i = 0; i < new_count; ++i) {
+                int target_line = new_start - 1 + i;
+                if (target_line >= 0) {
+                    marks.lines[target_line] = GitLineDiffType::Added;
+                }
+            }
+        } else {
+            for (int i = 0; i < new_count; ++i) {
+                int target_line = new_start - 1 + i;
+                if (target_line >= 0) {
+                    marks.lines[target_line] = GitLineDiffType::Modified;
+                }
+            }
+        }
+    }
+
+    return marks;
+}
+
+std::string GitManager::GetFileDiff(const std::string& rel_or_abs_path) const {
+    if (repo_path_.empty()) return "";
+
+    std::string norm = NormalizePath(rel_or_abs_path);
+    if (!repo_path_.empty() && norm.starts_with(repo_path_)) {
+        norm = norm.substr(repo_path_.length());
+        if (!norm.empty() && norm[0] == '/') norm = norm.substr(1);
+    }
+    if (norm.empty()) return "";
+
+    auto res = RunGit("diff HEAD -u -- \"" + norm + "\"");
+    if (res.exit_code != 0 || res.output.empty()) {
+        res = RunGit("diff -u -- \"" + norm + "\"");
+    }
+
+    if (res.output.empty()) {
+        char st = GetFileStatusCode(norm);
+        if (st == '?') {
+            return "--- /dev/null\n+++ b/" + norm + "\n@@ -0,0 +1 @@\n+ (Untracked file: entire file is new)";
+        }
+        return "No changes detected.";
+    }
+
+    return res.output;
+}
+
 GitManager::GitState GitManager::QueryGitState() const {
     GitState state;
     if (repo_path_.empty()) return state;

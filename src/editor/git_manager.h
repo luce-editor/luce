@@ -30,6 +30,17 @@ enum class GitStatusType {
     Unknown
 };
 
+enum class GitLineDiffType {
+    None,
+    Added,
+    Modified,
+    Deleted
+};
+
+struct GitFileDiffMarks {
+    std::unordered_map<int, GitLineDiffType> lines; // 0-indexed line number -> diff type
+};
+
 struct GitFileStatus {
     std::string path;
     GitStatusType type = GitStatusType::Modified;
@@ -81,6 +92,12 @@ public:
 
     /// Returns status code for file tree badge ('M', 'U', 'D', 'A', or '\0')
     char GetFileStatusCode(const std::string& rel_or_abs_path) const;
+
+    /// Returns line-by-line diff markers for editor gutter (0-indexed lines)
+    GitFileDiffMarks GetFileDiffMarks(const std::string& rel_or_abs_path) const;
+
+    /// Returns full unified diff text for a file
+    std::string GetFileDiff(const std::string& rel_or_abs_path) const;
 
     void Refresh();
     void RefreshAsync();

@@ -15,9 +15,28 @@ The **Command Palette** is Luce's central navigation and action hub, providing r
 
 | Shortcut | Mode | Purpose |
 | :--- | :--- | :--- |
-| `Ctrl+Shift+P` | **Commands** | Search and execute any editor, theme, or Lua plugin command |
+| `Ctrl+Shift+P` | **Commands** | Prompted with `>`. Search and execute any editor, theme, or Lua plugin command |
 | `Ctrl+P` | **Quick Open** | Rapidly fuzzy-search and jump to any project file |
+| `Ctrl+Shift+F` | **Project Search** | Find in Files across the entire project with line previews and instant jump |
 | `Ctrl+G` | **Go to Line** | Jump directly to a specified line number (prefixed with `:`) |
+
+---
+
+## Command Prompt `>` & Dynamic Mode Switching
+
+The input box dynamically switches modes as you type, matching modern editor workflows:
+- **`>` Prefix for Commands**: Opening with `Ctrl+Shift+P` pre-populates the `>` prompt. Removing the `>` automatically switches to file search (*Quick Open*). Typing `>` at the beginning switches back to commands.
+- **`:` Prefix for Line Jump**: Typing `:` switches directly into *Go to Line* mode.
+- **`?` Prefix or `Ctrl+Shift+F` for Project Search**: Widescreen search across all source files in the project.
+
+---
+
+## Project-Wide Search (`Ctrl+Shift+F`)
+
+Pressing `Ctrl+Shift+F` activates **Find in Files**:
+- **Deep Workspace Indexing**: Scans all readable source files across the workspace while ignoring binary files, `.git`, `build`, and `node_modules`.
+- **Two-Line Result Layout**: Shows relative file paths and line numbers on top, with trimmed syntax snippets underneath.
+- **Instant Navigation**: Selecting a match with `Enter` or mouse click opens the target file in the editor and scrolls the cursor directly to the matched line and column.
 
 ---
 

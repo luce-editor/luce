@@ -8,8 +8,11 @@
 
 #include "editor_view.h"
 #include "diagnostic.h"
+#include "editor/symbol_index.h"
+#include "editor/git_manager.h"
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -38,6 +41,8 @@ void EditorView::SetTheme(const Theme* t) { theme_ = t; }
 void EditorView::Render(const char* id) {
     if (!buffer_ || !theme_) return;
 
+    hovered_symbol_.reset();
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, theme_->background);
     ImGui::BeginChild(id, ImVec2(0, 0), false,
         ImGuiWindowFlags_HorizontalScrollbar |
@@ -45,6 +50,12 @@ void EditorView::Render(const char* id) {
         ImGuiWindowFlags_NoNavInputs);
 
     focused_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+
+    if (needs_focus_) {
+        ImGui::SetWindowFocus();
+        focused_ = true;
+        needs_focus_ = false;
+    }
 
     // ImGui's core navigation drops window focus when Escape is pressed.
     // If autocomplete is open, we intercept this, close it, and forcefully restore focus.
@@ -60,6 +71,12 @@ void EditorView::Render(const char* id) {
     float window_height   = ImGui::GetWindowHeight();
     float window_width    = ImGui::GetWindowWidth();
 
+    git_diff_timer_ -= ImGui::GetIO().DeltaTime;
+    if (git_diff_timer_ <= 0.0f) {
+        git_diff_timer_ = 2.0f;
+        RefreshGitDiff();
+    }
+
     int total_lines       = buffer_->GetLineCount();
     int first_line        = static_cast<int>(ImGui::GetScrollY() / line_height);
     int last_line         = std::min(total_lines,
@@ -71,6 +88,11 @@ void EditorView::Render(const char* id) {
     ImVec2 origin = ImGui::GetCursorScreenPos();
     origin.y -= ImGui::GetScrollY() - first_line * line_height;
     origin.x -= ImGui::GetScrollX();
+
+    last_origin_ = origin;
+    last_line_height_ = line_height;
+    last_char_width_ = char_width;
+    last_gutter_width_ = gutter_width;
 
     // Active line highlight (full-width background bar).
     RenderActiveLineHighlight(dl, origin, line_height, gutter_width, window_width + ImGui::GetScrollX());
@@ -87,6 +109,9 @@ void EditorView::Render(const char* id) {
     // Diagnostics (red/yellow squiggly underlines).
     RenderDiagnostics(dl, origin, line_height, char_width, first_line, last_line, gutter_width);
 
+    // Symbol hover & Ctrl+Click navigation
+    RenderSymbolHoverAndNavigation(dl, origin, line_height, char_width, gutter_width);
+
     // Blinking cursors.
     RenderCursors(dl, origin, line_height, char_width, gutter_width);
 
@@ -102,25 +127,22 @@ void EditorView::Render(const char* id) {
     ImGui::Dummy(ImVec2(gutter_width + max_line_len + char_width * 20,
                          (total_lines + 8) * line_height));
 
-    // Handle mouse wheel scrolling explicitly when hovered
-    if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
-        float scroll_delta = -ImGui::GetIO().MouseWheel * line_height * 3.0f;
-        ImGui::SetScrollY(std::clamp(ImGui::GetScrollY() + scroll_delta, 0.0f, ImGui::GetScrollMaxY()));
-    }
-
     // Set mouse cursor to I-beam when hovering over text area
     if (ImGui::IsWindowHovered()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
     }
 
-    // Input handling — always active when the editor has focus.
-    // Note: HandleTextInput() already ignores characters while WantTextInput is
-    // captured by another widget (e.g. find bar). Ctrl-shortcuts (Ctrl+Z, etc.)
-    // must never be gated behind WantTextInput or they silently stop working.
+    // Input handling — active when the editor has focus, or hovered for navigation shortcuts
+    bool is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     if (focused_) {
         HandleMouseInput(origin, line_height, char_width, gutter_width);
         HandleKeyboardInput();
         HandleTextInput();
+    } else if (is_hovered) {
+        HandleMouseInput(origin, line_height, char_width, gutter_width);
+        if (ImGui::IsKeyPressed(ImGuiKey_F12) || (ImGui::GetIO().KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))) {
+            GoToDefinition();
+        }
     }
 
     // Only scroll to the cursor when something actually moved it.
@@ -132,6 +154,46 @@ void EditorView::Render(const char* id) {
     // Render autocomplete suggestions popup right above/below cursor
     if (ac_open_ && focused_) {
         RenderAutocomplete(origin, line_height, char_width, gutter_width);
+    }
+
+    // Minimap (rendered on top along the right edge of editor)
+    if (show_minimap) {
+        RenderMinimap(dl, origin, line_height, char_width, total_lines, first_line, last_line, gutter_width);
+    } else {
+        // Toggle button in the top-right corner to show minimap
+        ImVec2 win_pos = ImGui::GetWindowPos();
+        ImVec2 win_size = ImGui::GetWindowSize();
+        ImVec2 btn_pos(win_pos.x + win_size.x - 36.0f, win_pos.y + 6.0f);
+        ImGui::SetCursorScreenPos(btn_pos);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.12f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.22f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(theme_->gutter_fg.x, theme_->gutter_fg.y, theme_->gutter_fg.z, 0.65f));
+        if (ImGui::SmallButton("[|]##show_minimap")) {
+            show_minimap = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Show Minimap (Ctrl+M)");
+        }
+        ImGui::PopStyleColor(4);
+    }
+
+    // Right-click context menu
+    if (ImGui::BeginPopupContextWindow("##editor_context_menu", ImGuiPopupFlags_MouseButtonRight)) {
+        if (ImGui::MenuItem("Go to Definition", "F12 / Ctrl+Click / Ctrl+Enter")) {
+            GoToDefinition();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Cut", "Ctrl+X")) { Cut(); }
+        if (ImGui::MenuItem("Copy", "Ctrl+C")) { Copy(); }
+        if (ImGui::MenuItem("Paste", "Ctrl+V")) { Paste(); }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Toggle Comment", "Ctrl+/")) { ToggleComment(); }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Minimap", "Ctrl+M", show_minimap)) {
+            show_minimap = !show_minimap;
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::EndChild();
@@ -157,6 +219,9 @@ void EditorView::RenderGutter(ImDrawList* dl, ImVec2 origin, float lh,
     ImU32 active_fg = ImGui::ColorConvertFloat4ToU32(theme_->foreground);
     int cursor_line = cursors_.Primary().position.line;
 
+    float strip_x = origin.x + scroll_x + gw - 7.0f;
+    float strip_w = 3.0f;
+
     for (int i = first; i < last; ++i) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%d", i + 1);
@@ -164,6 +229,32 @@ void EditorView::RenderGutter(ImDrawList* dl, ImVec2 origin, float lh,
         float x = origin.x + scroll_x + gw - text_width - 12.0f;
         float y = origin.y + i * lh;
         dl->AddText(ImVec2(x, y), (i == cursor_line) ? active_fg : fg, buf);
+
+        // Git Gutter diff marker (Added, Modified, Deleted)
+        auto it = git_diff_marks_.lines.find(i);
+        if (it != git_diff_marks_.lines.end()) {
+            if (it->second == GitLineDiffType::Added) {
+                // Vibrant green bar
+                dl->AddRectFilled(ImVec2(strip_x, y), ImVec2(strip_x + strip_w, y + lh), IM_COL32(73, 208, 130, 255));
+            } else if (it->second == GitLineDiffType::Modified) {
+                // Vibrant blue bar
+                dl->AddRectFilled(ImVec2(strip_x, y), ImVec2(strip_x + strip_w, y + lh), IM_COL32(76, 161, 254, 255));
+            } else if (it->second == GitLineDiffType::Deleted) {
+                // Small red triangle marker pointing right
+                dl->AddTriangleFilled(ImVec2(strip_x - 1.0f, y),
+                                      ImVec2(strip_x + strip_w + 1.0f, y),
+                                      ImVec2(strip_x - 1.0f, y + 4.0f),
+                                      IM_COL32(248, 81, 73, 255));
+            }
+        }
+    }
+}
+
+void EditorView::RefreshGitDiff() {
+    if (!current_file_path_.empty()) {
+        git_diff_marks_ = GitManager::Instance().GetFileDiffMarks(current_file_path_);
+    } else {
+        git_diff_marks_.lines.clear();
     }
 }
 
@@ -273,7 +364,14 @@ void EditorView::RenderDiagnostics(ImDrawList* dl, ImVec2 origin, float lh,
     }
 
     if (!hovered_msg.empty() && ImGui::IsWindowHovered()) {
-        ImGui::SetTooltip("%s", hovered_msg.c_str());
+        if (ImGui::BeginTooltip()) {
+            ImGui::TextUnformatted(hovered_msg.c_str());
+            ImGui::Separator();
+            if (ImGui::SmallButton("Copy Message")) {
+                ImGui::SetClipboardText(hovered_msg.c_str());
+            }
+            ImGui::EndTooltip();
+        }
     }
 }
 
@@ -332,6 +430,405 @@ void EditorView::RenderActiveLineHighlight(ImDrawList* dl, ImVec2 origin,
         dl->AddRectFilled(ImVec2(origin.x, y),
                           ImVec2(origin.x + ww, y + lh), color);
     }
+}
+
+// ── Minimap ───────────────────────────────────────────────────────────────
+
+void EditorView::RenderMinimap(ImDrawList* dl, ImVec2 origin, float lh, float cw,
+                               int total_lines, int first_line, int last_line, float gw) {
+    if (!show_minimap || !buffer_ || total_lines <= 0) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 win_pos = ImGui::GetWindowPos();
+    ImVec2 win_size = ImGui::GetWindowSize();
+    float scroll_y = ImGui::GetScrollY();
+
+    float minimap_w = 118.0f;
+    float scrollbar_w = 16.0f;
+    float mm_x1 = win_pos.x + win_size.x - minimap_w - scrollbar_w;
+    float mm_x2 = mm_x1 + minimap_w;
+    float mm_y1 = win_pos.y;
+    float mm_y2 = mm_y1 + win_size.y;
+
+    // Minimap background (sleek translucent panel)
+    ImU32 mm_bg = ImColor(
+        static_cast<int>(theme_->background.x * 190),
+        static_cast<int>(theme_->background.y * 190),
+        static_cast<int>(theme_->background.z * 190),
+        225);
+    dl->AddRectFilled(ImVec2(mm_x1, mm_y1), ImVec2(mm_x2, mm_y2), mm_bg);
+
+    // Subtle left border divider
+    ImU32 border_col = ImGui::GetColorU32(ImGuiCol_Border);
+    dl->AddLine(ImVec2(mm_x1, mm_y1), ImVec2(mm_x1, mm_y2), border_col, 1.0f);
+
+    float avail_h = win_size.y;
+    float line_pitch = 3.5f;
+    float mini_bar_h = 2.0f;
+
+    // Calculate minimap scroll offset if document is taller than window
+    float total_mm_h = static_cast<float>(total_lines) * line_pitch;
+    float mm_scroll_y = 0.0f;
+    if (total_mm_h > avail_h) {
+        float max_editor_scroll = std::max(1.0f, ImGui::GetScrollMaxY());
+        float scroll_ratio = std::clamp(scroll_y / max_editor_scroll, 0.0f, 1.0f);
+        mm_scroll_y = scroll_ratio * (total_mm_h - avail_h);
+    }
+
+    // Determine range of lines visible in minimap
+    int mm_first_line = std::max(0, static_cast<int>(mm_scroll_y / line_pitch));
+    int mm_last_line = std::min(total_lines, static_cast<int>((mm_scroll_y + avail_h) / line_pitch) + 2);
+
+    float char_pitch = 1.8f;
+    float pad_x = 7.0f;
+
+    for (int l = mm_first_line; l < mm_last_line; ++l) {
+        float y = mm_y1 + static_cast<float>(l) * line_pitch - mm_scroll_y;
+        if (y < mm_y1 - line_pitch || y > mm_y2) continue;
+
+        const std::string& line = buffer_->GetLine(l);
+        if (line.empty()) continue;
+
+        size_t indent = line.find_first_not_of(" \t");
+        if (indent == std::string::npos) continue;
+
+        float start_x = mm_x1 + pad_x + static_cast<float>(indent) * char_pitch;
+
+        if (highlighter_) {
+            const auto& tokens = highlighter_->GetTokensForLine(l, line);
+            if (tokens.empty()) {
+                float tx2 = std::min(mm_x2 - 6.0f, start_x + static_cast<float>(line.size() - indent) * char_pitch);
+                ImU32 def_col = ImColor(theme_->gutter_fg.x, theme_->gutter_fg.y, theme_->gutter_fg.z, 0.6f);
+                dl->AddRectFilled(ImVec2(start_x, y), ImVec2(tx2, y + mini_bar_h), def_col, 0.5f);
+            } else {
+                for (const auto& tok : tokens) {
+                    if (tok.start + tok.length <= static_cast<int>(indent)) continue;
+                    float tx1 = mm_x1 + pad_x + static_cast<float>(tok.start) * char_pitch;
+                    float tx2 = tx1 + static_cast<float>(tok.length) * char_pitch;
+                    if (tx2 > tx1 + 1.2f) {
+                        tx2 -= 1.0f; // 1px space between words creates code structure
+                    }
+                    tx1 = std::clamp(tx1, mm_x1 + pad_x, mm_x2 - 6.0f);
+                    tx2 = std::clamp(tx2, mm_x1 + pad_x, mm_x2 - 6.0f);
+                    if (tx2 > tx1) {
+                        ImVec4 c = theme_->GetTokenColor(tok.type);
+                        ImU32 tcol = ImColor(c.x, c.y, c.z, 0.85f);
+                        dl->AddRectFilled(ImVec2(tx1, y), ImVec2(tx2, y + mini_bar_h), tcol, 0.5f);
+                    }
+                }
+            }
+        } else {
+            float tx2 = std::min(mm_x2 - 6.0f, start_x + static_cast<float>(line.size() - indent) * char_pitch);
+            ImU32 def_col = ImColor(theme_->gutter_fg.x, theme_->gutter_fg.y, theme_->gutter_fg.z, 0.6f);
+            dl->AddRectFilled(ImVec2(start_x, y), ImVec2(tx2, y + mini_bar_h), def_col, 0.5f);
+        }
+    }
+
+    // Viewport lens (highlight rectangle representing visible code)
+    float vp_y1 = mm_y1 + static_cast<float>(first_line) * line_pitch - mm_scroll_y;
+    float vp_y2 = mm_y1 + static_cast<float>(last_line) * line_pitch - mm_scroll_y;
+    vp_y1 = std::clamp(vp_y1, mm_y1, mm_y2);
+    vp_y2 = std::clamp(vp_y2, mm_y1, mm_y2);
+
+    bool mouse_in_mm = (io.MousePos.x >= mm_x1 && io.MousePos.x <= mm_x2 &&
+                        io.MousePos.y >= mm_y1 && io.MousePos.y <= mm_y2);
+
+    ImU32 vp_bg = mouse_in_mm ? ImColor(255, 255, 255, 36) : ImColor(255, 255, 255, 20);
+    ImU32 vp_border = mouse_in_mm ? ImColor(255, 255, 255, 85) : ImColor(255, 255, 255, 45);
+    dl->AddRectFilled(ImVec2(mm_x1 + 1.0f, vp_y1), ImVec2(mm_x2 - 1.0f, vp_y2), vp_bg, 2.0f);
+    dl->AddRect(ImVec2(mm_x1 + 1.0f, vp_y1), ImVec2(mm_x2 - 1.0f, vp_y2), vp_border, 2.0f, 0, 1.0f);
+
+    // Cursor position marker in minimap
+    if (!cursors_.cursors.empty()) {
+        int cur_line = cursors_.Primary().position.line;
+        float cur_y = mm_y1 + static_cast<float>(cur_line) * line_pitch - mm_scroll_y;
+        if (cur_y >= mm_y1 && cur_y <= mm_y2) {
+            ImU32 cur_col = ImColor(theme_->syntax_function.x, theme_->syntax_function.y, theme_->syntax_function.z, 0.95f);
+            dl->AddRectFilled(ImVec2(mm_x1, cur_y), ImVec2(mm_x2, cur_y + 1.5f), cur_col);
+        }
+    }
+
+    // Top-right close button inside minimap
+    ImVec2 close_btn_pos(mm_x2 - 18.0f, mm_y1 + 4.0f);
+    ImGui::SetCursorScreenPos(close_btn_pos);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(theme_->gutter_fg.x, theme_->gutter_fg.y, theme_->gutter_fg.z, 0.7f));
+    if (ImGui::SmallButton("x##close_mm")) {
+        show_minimap = false;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Hide Minimap (Ctrl+M)");
+    }
+    ImGui::PopStyleColor(4);
+
+    // Handle mouse clicking & dragging inside minimap
+    if (mouse_in_mm) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+
+    if (mouse_in_mm && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        minimap_dragging_ = true;
+    }
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        minimap_dragging_ = false;
+    }
+
+    if (minimap_dragging_) {
+        float rel_y = io.MousePos.y - mm_y1 + mm_scroll_y;
+        int target_line = static_cast<int>(rel_y / line_pitch);
+        target_line = std::clamp(target_line, 0, total_lines - 1);
+        int half_visible = (last_line - first_line) / 2;
+        float new_scroll_y = static_cast<float>(target_line - half_visible) * lh;
+        ImGui::SetScrollY(std::clamp(new_scroll_y, 0.0f, ImGui::GetScrollMaxY()));
+    }
+}
+
+// ── Symbol hover & Ctrl+Click navigation ───────────────────────────────────
+
+void EditorView::RenderSymbolHoverAndNavigation(ImDrawList* dl, ImVec2 origin, float lh, float cw, float gw) {
+    if (!symbol_index_ || !buffer_) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mouse_pos = io.MousePos;
+    ImVec2 win_pos = ImGui::GetWindowPos();
+    ImVec2 win_size = ImGui::GetWindowSize();
+
+    float minimap_w = show_minimap ? 110.0f : 0.0f;
+    float scrollbar_w = 16.0f;
+
+    // Must be within text bounds (not gutter, not scrollbars, not minimap)
+    if (mouse_pos.x < win_pos.x + gw || mouse_pos.x >= win_pos.x + win_size.x - minimap_w - scrollbar_w ||
+        mouse_pos.y < win_pos.y || mouse_pos.y >= win_pos.y + win_size.y - scrollbar_w) {
+        return;
+    }
+
+    TextPosition tpos = ScreenToTextPosition(origin, mouse_pos, lh, cw, gw);
+    if (tpos.line < 0 || tpos.line >= buffer_->GetLineCount()) return;
+
+    const std::string& line = buffer_->GetLine(tpos.line);
+    int len = static_cast<int>(line.size());
+    if (tpos.column < 0 || tpos.column >= len) return;
+
+    char ch = line[tpos.column];
+    if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') return;
+
+    int left = tpos.column;
+    while (left > 0 && (std::isalnum(static_cast<unsigned char>(line[left - 1])) || line[left - 1] == '_')) {
+        left--;
+    }
+    int right = tpos.column;
+    while (right < len && (std::isalnum(static_cast<unsigned char>(line[right])) || line[right] == '_')) {
+        right++;
+    }
+    if (right <= left) return;
+
+    std::string word = line.substr(left, right - left);
+    if (word.empty()) return;
+
+    // Do not show symbol hover for C++ language keywords
+    static const std::unordered_set<std::string> kKeywords = {
+        "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor",
+        "bool", "break", "case", "catch", "char", "char8_t", "char16_t", "char32_t",
+        "class", "compl", "concept", "const", "consteval", "constexpr", "constinit",
+        "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype",
+        "default", "delete", "do", "double", "dynamic_cast", "else", "enum",
+        "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
+        "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept",
+        "not", "not_eq", "nullptr", "operator", "or", "or_eq", "override", "private",
+        "protected", "public", "register", "reinterpret_cast", "requires", "return",
+        "short", "signed", "sizeof", "static", "static_assert", "static_cast",
+        "struct", "switch", "template", "this", "thread_local", "throw", "true",
+        "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
+        "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
+    };
+    if (kKeywords.contains(word)) return;
+
+    // Suppress symbol hover if this word is at an active compiler/linter error location
+    if (!current_file_path_.empty()) {
+        std::string norm_path = current_file_path_;
+        std::ranges::replace(norm_path, '\\', '/');
+        auto diags = DiagnosticManager::Instance().GetDiagnosticsForFile(norm_path);
+        for (const auto& d : diags) {
+            if (d.line == tpos.line + 1 && d.severity == DiagnosticSeverity::Error) {
+                int d_col_start = std::max(0, d.column - 1);
+                int d_col_end = d_col_start + 4;
+                if (d_col_start < len) {
+                    int peek = d_col_start;
+                    while (peek < len && line[peek] != ' ' && line[peek] != '\t' && line[peek] != ';') peek++;
+                    if (peek > d_col_start) d_col_end = peek;
+                }
+                if (left <= d_col_end && right >= d_col_start) {
+                    return; // Error squiggly tooltip takes priority
+                }
+            }
+        }
+    }
+
+    auto sym_opt = symbol_index_->FindSymbol(word, current_file_path_);
+    if (!sym_opt.has_value()) return;
+
+    const auto& sym = *sym_opt;
+
+    float x1 = origin.x + gw + static_cast<float>(left) * cw;
+    float x2 = origin.x + gw + static_cast<float>(right) * cw;
+    float y1 = origin.y + static_cast<float>(tpos.line) * lh;
+    float y2 = y1 + lh;
+
+    if (mouse_pos.x >= x1 && mouse_pos.x <= x2 && mouse_pos.y >= y1 && mouse_pos.y <= y2) {
+        hovered_symbol_ = sym;
+        if (io.KeyCtrl) {
+            ImU32 link_col = ImGui::ColorConvertFloat4ToU32(theme_->syntax_function);
+            dl->AddLine(ImVec2(x1, y2 - 2.0f), ImVec2(x2, y2 - 2.0f), link_col, 1.5f);
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+
+        // Direct jump on Ctrl+Click, Ctrl+Enter, or F12 while hovering over this symbol
+        if (on_goto_definition_) {
+            bool clicked_link = io.KeyCtrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+            bool key_jump = ImGui::IsKeyPressed(ImGuiKey_F12) || 
+                            (io.KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)));
+            if (clicked_link || key_jump) {
+                on_goto_definition_(sym.file_path, sym.line);
+                return;
+            }
+        }
+
+        if (io.KeyCtrl || ImGui::IsWindowHovered()) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+            ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(theme_->background.x * 0.85f, theme_->background.y * 0.85f, theme_->background.z * 0.85f, 0.98f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetStyleColorVec4(ImGuiCol_Border));
+
+            if (ImGui::BeginTooltip()) {
+                std::string sig = sym.signature.empty() ? (sym.scope.empty() ? sym.name : (sym.scope + "::" + sym.name)) : sym.signature;
+
+                std::istringstream ss(sig);
+                std::string tok;
+                bool first_tok = true;
+                while (ss >> tok) {
+                    if (!first_tok) ImGui::SameLine(0, 4.0f);
+                    first_tok = false;
+
+                    if (tok == "inline" || tok == "virtual" || tok == "static" || tok == "constexpr" ||
+                        tok == "explicit" || tok == "const" || tok == "override" || tok == "final" ||
+                        tok == "noexcept" || tok == "class" || tok == "struct" || tok == "function") {
+                        ImGui::TextColored(theme_->syntax_keyword, "%s", tok.c_str());
+                    } else if (tok == "bool" || tok == "void" || tok == "int" || tok == "float" ||
+                               tok == "double" || tok == "char" || tok == "size_t" || tok == "auto" ||
+                               tok.starts_with("std::") || tok.starts_with("ImVec") || tok.starts_with("ImFont")) {
+                        ImGui::TextColored(theme_->syntax_type, "%s", tok.c_str());
+                    } else if (tok.find('(') != std::string::npos) {
+                        auto paren = tok.find('(');
+                        std::string fn_part = tok.substr(0, paren);
+                        std::string rest = tok.substr(paren);
+                        ImGui::TextColored(theme_->syntax_function, "%s", fn_part.c_str());
+                        ImGui::SameLine(0, 0);
+                        ImGui::TextColored(theme_->syntax_punctuation, "%s", rest.c_str());
+                    } else {
+                        ImGui::TextColored(theme_->foreground, "%s", tok.c_str());
+                    }
+                }
+
+                if (!sym.doc_comment.empty()) {
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    ImGui::TextColored(theme_->gutter_fg, "%s", sym.doc_comment.c_str());
+                }
+
+                ImGui::Spacing();
+                std::string filename = std::filesystem::path(sym.file_path).filename().string();
+                ImGui::TextDisabled("Ctrl+Click or Ctrl+Enter / F12 to go to definition (%s:%d)", filename.c_str(), sym.line);
+
+                ImGui::EndTooltip();
+            }
+
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(2);
+        }
+    }
+}
+
+bool EditorView::GoToDefinition() {
+    if (!symbol_index_ || !on_goto_definition_ || !buffer_) return false;
+
+    // 1. If mouse is currently hovering over a symbol that was resolved and highlighted, jump immediately!
+    if (hovered_symbol_.has_value()) {
+        on_goto_definition_(hovered_symbol_->file_path, hovered_symbol_->line);
+        return true;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mouse_pos = io.MousePos;
+    ImVec2 win_pos = ImGui::GetWindowPos();
+    ImVec2 win_size = ImGui::GetWindowSize();
+    float minimap_w = show_minimap ? 110.0f : 0.0f;
+    float scrollbar_w = 16.0f;
+
+    std::string target_word;
+
+    // 2. Check if mouse is hovering over an identifier in the text area
+    bool mouse_in_text = (mouse_pos.x >= win_pos.x + last_gutter_width_ &&
+                          mouse_pos.x < win_pos.x + win_size.x - minimap_w - scrollbar_w &&
+                          mouse_pos.y >= win_pos.y &&
+                          mouse_pos.y < win_pos.y + win_size.y - scrollbar_w);
+
+    if (mouse_in_text && last_line_height_ > 0.0f && last_char_width_ > 0.0f) {
+        TextPosition tpos = ScreenToTextPosition(last_origin_, mouse_pos, last_line_height_, last_char_width_, last_gutter_width_);
+        if (tpos.line >= 0 && tpos.line < buffer_->GetLineCount()) {
+            const auto& line = buffer_->GetLine(tpos.line);
+            int len = static_cast<int>(line.size());
+            if (tpos.column >= 0 && tpos.column < len &&
+                (std::isalnum(static_cast<unsigned char>(line[tpos.column])) || line[tpos.column] == '_')) {
+                int left = tpos.column;
+                while (left > 0 && (std::isalnum(static_cast<unsigned char>(line[left - 1])) || line[left - 1] == '_')) left--;
+                int right = tpos.column;
+                while (right < len && (std::isalnum(static_cast<unsigned char>(line[right])) || line[right] == '_')) right++;
+                std::string w = line.substr(left, right - left);
+                if (!w.empty() && symbol_index_->FindSymbol(w, current_file_path_).has_value()) {
+                    target_word = w;
+                }
+            }
+        }
+    }
+
+    // 3. If no valid hovered symbol under mouse, check primary cursor
+    if (target_word.empty()) {
+        const auto& cur = cursors_.Primary().position;
+        if (cur.line >= 0 && cur.line < buffer_->GetLineCount()) {
+            const auto& line = buffer_->GetLine(cur.line);
+            int len = static_cast<int>(line.size());
+            int col = cur.column;
+            // If cursor is at or past the end of word (e.g. `funk|()` or `funk|;`), look left
+            if (col > 0 && (col >= len || (!std::isalnum(static_cast<unsigned char>(line[col])) && line[col] != '_'))) {
+                if (std::isalnum(static_cast<unsigned char>(line[col - 1])) || line[col - 1] == '_') {
+                    col = col - 1;
+                }
+            }
+            if (col >= 0 && col < len &&
+                (std::isalnum(static_cast<unsigned char>(line[col])) || line[col] == '_')) {
+                int left = col;
+                while (left > 0 && (std::isalnum(static_cast<unsigned char>(line[left - 1])) || line[left - 1] == '_')) left--;
+                int right = col;
+                while (right < len && (std::isalnum(static_cast<unsigned char>(line[right])) || line[right] == '_')) right++;
+                std::string w = line.substr(left, right - left);
+                if (!w.empty() && symbol_index_->FindSymbol(w, current_file_path_).has_value()) {
+                    target_word = w;
+                }
+            }
+        }
+    }
+
+    if (target_word.empty()) return false;
+
+    auto sym = symbol_index_->FindSymbol(target_word, current_file_path_);
+    if (sym.has_value() && on_goto_definition_) {
+        on_goto_definition_(sym->file_path, sym->line);
+        return true;
+    }
+    return false;
 }
 
 // ── Find bar ──────────────────────────────────────────────────────────────
@@ -396,8 +893,10 @@ void EditorView::HandleKeyboardInput() {
             ApplyAutocomplete();
             return;
         }
-        // Escape is now handled globally at the start of EditorView::Render()
-        // to prevent ImGui from silently dropping window focus before we reach here.
+    }
+    // Go to Definition shortcut: F12
+    if (ImGui::IsKeyPressed(ImGuiKey_F12)) {
+        GoToDefinition();
     }
 
     // Navigation
@@ -417,11 +916,27 @@ void EditorView::HandleKeyboardInput() {
     // Editing
     if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
         if (ctrl) DeleteWordAtCursors(false); else DeleteAtCursors(false);
+        UpdateAutocomplete();
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
         if (ctrl) DeleteWordAtCursors(true); else DeleteAtCursors(true);
+        UpdateAutocomplete();
     }
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter))     InsertNewLine();
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+        if (ctrl) {
+            // If on a symbol (hovered or at cursor), jump to definition
+            if (!GoToDefinition()) {
+                // Otherwise Ctrl+Enter: Insert line below without splitting current line
+                MoveCursorEnd(false);
+                InsertNewLine();
+            }
+        } else {
+            InsertNewLine();
+        }
+    }
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Space)) {
+        UpdateAutocomplete();
+    }
     if (ImGui::IsKeyPressed(ImGuiKey_Tab))       HandleTab(shift);
 
     // Clipboard
@@ -461,20 +976,27 @@ void EditorView::HandleMouseInput(ImVec2 origin, float lh, float cw, float gw) {
     ImVec2 win_pos = ImGui::GetWindowPos();
     ImVec2 win_size = ImGui::GetWindowSize();
 
-    // Check if mouse is on the vertical scrollbar area (right 16px) or horizontal scrollbar (bottom 16px)
+    // Check if mouse is on the vertical scrollbar area (right 16px) or horizontal scrollbar (bottom 16px) or minimap
+    float minimap_w = show_minimap ? 110.0f : 0.0f;
+    bool on_minimap = (io.MousePos.x >= win_pos.x + win_size.x - minimap_w - 16.0f &&
+                       io.MousePos.x <= win_pos.x - 16.0f);
     bool on_v_scrollbar = (io.MousePos.x >= win_pos.x + win_size.x - 16.0f);
     bool on_h_scrollbar = (io.MousePos.y >= win_pos.y + win_size.y - 16.0f);
 
-    if (on_v_scrollbar || on_h_scrollbar) {
-        return; // Don't drag-select when user interacts with scrollbars
+    if (on_v_scrollbar || on_h_scrollbar || on_minimap) {
+        return; // Don't drag-select when user interacts with scrollbars or minimap
     }
 
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         TextPosition pos = ScreenToTextPosition(origin, io.MousePos, lh, cw, gw);
 
         if (io.KeyCtrl) {
-            // Ctrl+Click: add cursor.
-            cursors_.AddCursor(pos);
+            // Check if Ctrl+Click was on an identifier with Go to Definition
+            bool jumped = GoToDefinition();
+            if (!jumped) {
+                // Ctrl+Click: add cursor.
+                cursors_.AddCursor(pos);
+            }
         } else {
             // Regular click: single cursor.
             cursors_.ResetToSingle();
@@ -779,20 +1301,75 @@ void EditorView::DeleteAtCursors(bool forward) {
 void EditorView::DeleteWordAtCursors(bool forward) {
     buffer_->BeginUndoGroup();
     for (auto& c : cursors_.cursors) {
-        if (c.HasSelection()) { DeleteSelection(c); continue; }
+        if (c.HasSelection()) {
+            DeleteSelection(c);
+            continue;
+        }
         if (forward) {
-            int boundary = GetWordBoundaryRight(c.position.line, c.position.column);
-            buffer_->DeleteRange(c.position.line, c.position.column,
-                                 c.position.line, boundary);
+            int line_len = static_cast<int>(buffer_->GetLine(c.position.line).size());
+            if (c.position.column >= line_len) {
+                if (c.position.line < buffer_->GetLineCount() - 1) {
+                    // At end of line: merge with next line
+                    buffer_->DeleteRange(c.position.line, line_len,
+                                         c.position.line + 1, 0);
+                    c.ClearSelection();
+                }
+            } else {
+                int boundary = GetWordBoundaryRight(c.position.line, c.position.column);
+                if (boundary == c.position.column && c.position.line < buffer_->GetLineCount() - 1) {
+                    buffer_->DeleteRange(c.position.line, c.position.column,
+                                         c.position.line + 1, 0);
+                    c.ClearSelection();
+                } else if (boundary > c.position.column) {
+                    buffer_->DeleteRange(c.position.line, c.position.column,
+                                         c.position.line, boundary);
+                    c.ClearSelection();
+                }
+            }
         } else {
-            int boundary = GetWordBoundaryLeft(c.position.line, c.position.column);
-            buffer_->DeleteRange(c.position.line, boundary,
-                                 c.position.line, c.position.column);
-            c.position.column = boundary;
-            c.ClearSelection();
+            // Backward (Ctrl+Backspace)
+            const auto& line_text = buffer_->GetLine(c.position.line);
+            int col = std::min(c.position.column, static_cast<int>(line_text.size()));
+
+            // Check if everything before cursor on this line is whitespace (or col == 0)
+            bool only_whitespace = true;
+            for (int k = 0; k < col; ++k) {
+                if (!std::isspace(static_cast<unsigned char>(line_text[k]))) {
+                    only_whitespace = false;
+                    break;
+                }
+            }
+
+            if (only_whitespace && c.position.line > 0) {
+                // Line before cursor is only whitespace (or cursor is at col 0):
+                // Delete the newline and any leading whitespace on this line,
+                // merging back into the previous line.
+                int prev_line = c.position.line - 1;
+                int prev_len = static_cast<int>(buffer_->GetLine(prev_line).size());
+                buffer_->DeleteRange(prev_line, prev_len, c.position.line, col);
+                c.position.line = prev_line;
+                c.position.column = prev_len;
+                c.ClearSelection();
+            } else {
+                int boundary = GetWordBoundaryLeft(c.position.line, col);
+                if (boundary == col && c.position.line > 0) {
+                    int prev_line = c.position.line - 1;
+                    int prev_len = static_cast<int>(buffer_->GetLine(prev_line).size());
+                    buffer_->DeleteRange(prev_line, prev_len, c.position.line, col);
+                    c.position.line = prev_line;
+                    c.position.column = prev_len;
+                    c.ClearSelection();
+                } else if (boundary < col) {
+                    buffer_->DeleteRange(c.position.line, boundary,
+                                         c.position.line, col);
+                    c.position.column = boundary;
+                    c.ClearSelection();
+                }
+            }
         }
     }
     buffer_->EndUndoGroup();
+    needs_scroll_to_cursor_ = true;
 }
 
 /// Insert a newline at each cursor, preserving the previous line's indent.
@@ -1207,6 +1784,11 @@ void EditorView::Paste() {
 
 /// Scroll the view so that the primary cursor is visible.
 void EditorView::EnsureCursorVisible() {
+    if (!ImGui::GetCurrentContext() || !ImGui::GetCurrentWindowRead()) {
+        needs_scroll_to_cursor_ = true;
+        return;
+    }
+
     float lh = ImGui::GetTextLineHeightWithSpacing();
     float cw = ImGui::CalcTextSize("A").x;
     float gw = CalculateGutterWidth();
@@ -1317,12 +1899,20 @@ std::string EditorView::GetAutoIndent(int line) const {
     return indent;
 }
 
-void EditorView::GoToLine(int line) {
+void EditorView::GoToPosition(int line, int column) {
+    if (!buffer_ || buffer_->GetLineCount() == 0) return;
     line = std::clamp(line, 0, buffer_->GetLineCount() - 1);
+    int max_col = static_cast<int>(buffer_->GetLine(line).size());
+    column = std::clamp(column, 0, max_col);
     cursors_.ResetToSingle();
-    cursors_.Primary().MoveTo({line, 0});
+    cursors_.Primary().MoveTo({line, column});
     cursor_blink_time_ = 0.0;
     needs_scroll_to_cursor_ = true;
+    needs_focus_ = true;
+}
+
+void EditorView::GoToLine(int line) {
+    GoToPosition(line, 0);
 }
 
 // ── Autocomplete / IntelliSense popup ──────────────────────────────────────
@@ -1364,6 +1954,68 @@ bool IsDeclarationLine(const std::string& line, const std::string& word, AcSymbo
         return true;
     }
     return false;
+}
+
+static std::string ResolveVariableType(const TextBuffer* buffer, int current_line, const std::string& var_name) {
+    if (!buffer || var_name.empty() || current_line < 0) return "";
+
+    if (var_name == "this") {
+        for (int l = current_line; l >= 0; --l) {
+            const auto& line = buffer->GetLine(l);
+            static const std::regex re_enc(R"(\b(class|struct)\s+([a-zA-Z0-9_]+))");
+            std::smatch m;
+            if (std::regex_search(line, m, re_enc)) {
+                return m[2].str();
+            }
+        }
+        return "";
+    }
+
+    static const std::set<std::string> kNonTypes = {
+        "if", "while", "for", "switch", "case", "return", "throw", "else", "goto", "sizeof", "alignas"
+    };
+
+    std::string escaped_var;
+    for (char c : var_name) {
+        if (c == '.' || c == '[' || c == ']' || c == '(' || c == ')' || c == '{' || c == '}' ||
+            c == '*' || c == '+' || c == '?' || c == '^' || c == '$' || c == '\\' || c == '|') {
+            escaped_var += '\\';
+        }
+        escaped_var += c;
+    }
+
+    // Pattern 1: [Type] [*&] var_name
+    std::regex re_decl(R"(\b([a-zA-Z0-9_:]+)(?:<([a-zA-Z0-9_:]+)>)?(?:\s*[*&]+)?\s+)" + escaped_var + R"(\b(?:\s*[\(={\[;,]|\s*$))");
+
+    // Pattern 2: auto [*&] var_name = (new)? Type
+    std::regex re_auto(R"(\bauto(?:\s*[*&]+)?\s+)" + escaped_var + R"(\s*=\s*(?:new\s+)?([a-zA-Z0-9_:]+))");
+
+    int start_line = std::max(0, current_line - 300);
+    for (int l = current_line; l >= start_line; --l) {
+        std::string line = buffer->GetLine(l);
+        auto comment_pos = line.find("//");
+        if (comment_pos != std::string::npos) line = line.substr(0, comment_pos);
+
+        std::smatch m;
+        if (std::regex_search(line, m, re_auto)) {
+            std::string t = m[1].str();
+            if (!kNonTypes.contains(t)) return t;
+        }
+
+        if (std::regex_search(line, m, re_decl)) {
+            std::string base_type = m[1].str();
+            std::string templ_type = m[2].str();
+            if (base_type == "unique_ptr" || base_type == "shared_ptr" ||
+                base_type == "std::unique_ptr" || base_type == "std::shared_ptr") {
+                if (!templ_type.empty()) return templ_type;
+            }
+            if (base_type != "const" && base_type != "static" && base_type != "constexpr" && !kNonTypes.contains(base_type)) {
+                return base_type;
+            }
+        }
+    }
+
+    return "";
 }
 
 }  // namespace
@@ -1467,6 +2119,139 @@ void EditorView::UpdateAutocomplete() {
     }
 
     ac_include_mode_ = false;
+
+    // ── Member / Scope completion mode (e.g. t. or ptr-> or Type::) ───────
+    int member_start = col;
+    while (member_start > 0 && (std::isalnum(static_cast<unsigned char>(line_text[member_start - 1])) ||
+                                line_text[member_start - 1] == '_')) {
+        member_start--;
+    }
+    std::string member_prefix = line_text.substr(member_start, col - member_start);
+
+    // Look right before member_start for . or -> or ::
+    int op_pos = member_start;
+    while (op_pos > 0 && (line_text[op_pos - 1] == ' ' || line_text[op_pos - 1] == '\t')) {
+        op_pos--;
+    }
+
+    bool is_member_op = false;
+    bool is_scope_op  = false;
+    int  op_len       = 0;
+
+    if (op_pos >= 2 && line_text.substr(op_pos - 2, 2) == "->") {
+        is_member_op = true;
+        op_len = 2;
+    } else if (op_pos >= 2 && line_text.substr(op_pos - 2, 2) == "::") {
+        is_scope_op = true;
+        op_len = 2;
+    } else if (op_pos >= 1 && line_text[op_pos - 1] == '.') {
+        is_member_op = true;
+        op_len = 1;
+    }
+
+    if (is_member_op || is_scope_op) {
+        int var_end = op_pos - op_len;
+        while (var_end > 0 && (line_text[var_end - 1] == ' ' || line_text[var_end - 1] == '\t')) {
+            var_end--;
+        }
+        int var_start = var_end;
+        while (var_start > 0 && (std::isalnum(static_cast<unsigned char>(line_text[var_start - 1])) ||
+                                 line_text[var_start - 1] == '_' || line_text[var_start - 1] == ':')) {
+            var_start--;
+        }
+
+        std::string var_name = line_text.substr(var_start, var_end - var_start);
+        if (!var_name.empty()) {
+            std::string target_type;
+            if (is_scope_op) {
+                target_type = var_name;
+            } else {
+                target_type = ResolveVariableType(buffer_, c.position.line, var_name);
+                if (target_type.empty()) {
+                    target_type = var_name;
+                }
+            }
+
+            std::vector<SymbolInfo> members;
+            if (symbol_index_ && !target_type.empty()) {
+                members = symbol_index_->GetMembersOf(target_type);
+            }
+
+            // Also check if the class definition is present directly in current buffer
+            if (members.empty() && !target_type.empty()) {
+                int tot = buffer_->GetLineCount();
+                bool inside_class = false;
+                for (int l = 0; l < tot; ++l) {
+                    const auto& lt = buffer_->GetLine(l);
+                    if (!inside_class) {
+                        if (lt.find("class " + target_type) != std::string::npos ||
+                            lt.find("struct " + target_type) != std::string::npos) {
+                            inside_class = true;
+                        }
+                    } else {
+                        if (lt.find("};") != std::string::npos) {
+                            inside_class = false;
+                            break;
+                        }
+                        static const std::regex re_m(R"(\b([a-zA-Z0-9_]+)\s*\([^;{]*\))");
+                        std::smatch m;
+                        if (std::regex_search(lt, m, re_m)) {
+                            std::string fn_name = m[1].str();
+                            if (fn_name != target_type && !fn_name.starts_with("~") &&
+                                fn_name != "if" && fn_name != "while" && fn_name != "for") {
+                                SymbolInfo s;
+                                s.name = fn_name;
+                                s.kind = SymbolKind::Method;
+                                members.push_back(s);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!members.empty()) {
+                std::string lower_mem_prefix = member_prefix;
+                std::ranges::transform(lower_mem_prefix, lower_mem_prefix.begin(), ::tolower);
+
+                std::vector<std::string> matched_methods;
+                std::vector<std::string> matched_vars;
+                std::set<std::string> seen_members;
+
+                for (const auto& m : members) {
+                    std::string lower_name = m.name;
+                    std::ranges::transform(lower_name, lower_name.begin(), ::tolower);
+                    if (lower_name.starts_with(lower_mem_prefix)) {
+                        if (m.kind == SymbolKind::Method || m.kind == SymbolKind::Function) {
+                            std::string item = m.name + "()";
+                            if (!seen_members.contains(item)) {
+                                seen_members.insert(item);
+                                matched_methods.push_back(item);
+                            }
+                        } else {
+                            if (!seen_members.contains(m.name)) {
+                                seen_members.insert(m.name);
+                                matched_vars.push_back(m.name);
+                            }
+                        }
+                    }
+                }
+
+                std::ranges::sort(matched_methods);
+                std::ranges::sort(matched_vars);
+
+                ac_suggestions_.clear();
+                ac_suggestions_.insert(ac_suggestions_.end(), matched_methods.begin(), matched_methods.end());
+                ac_suggestions_.insert(ac_suggestions_.end(), matched_vars.begin(), matched_vars.end());
+
+                if (!ac_suggestions_.empty()) {
+                    ac_prefix_ = member_prefix;
+                    ac_selected_ = 0;
+                    ac_open_ = true;
+                    return;
+                }
+            }
+        }
+    }
 
     // ── Normal symbol / keyword completion ───────────────────────────────
     // Scan backwards from cursor for identifier prefix
@@ -1608,11 +2393,19 @@ void EditorView::UpdateAutocomplete() {
     std::ranges::sort(kw_matches);
     std::ranges::sort(emmet_matches);
 
-    for (const auto& s : fn_symbols)  push_unique(s);
-    for (const auto& s : var_symbols) push_unique(s);
-    for (const auto& s : plain_words) push_unique(s);
-    for (const auto& s : kw_matches)  push_unique(s);
-    for (const auto& s : emmet_matches) push_unique(s);
+    std::vector<std::string> plugin_matches;
+    if (completion_provider_) {
+        const auto& cur = cursors_.Primary();
+        plugin_matches = completion_provider_(ext, ac_prefix_, cur.position.line, cur.position.column);
+        std::ranges::sort(plugin_matches);
+    }
+
+    for (const auto& s : fn_symbols)      push_unique(s);
+    for (const auto& s : var_symbols)     push_unique(s);
+    for (const auto& s : plugin_matches)  push_unique(s);
+    for (const auto& s : plain_words)     push_unique(s);
+    for (const auto& s : kw_matches)      push_unique(s);
+    for (const auto& s : emmet_matches)   push_unique(s);
 
     if (ac_suggestions_.empty()) {
         ac_open_ = false;
@@ -1695,7 +2488,11 @@ void EditorView::ApplyAutocomplete() {
             if (start >= 0) {
                 buffer_->DeleteRange(cur_line, start, cur_line, col);
                 buffer_->InsertText(cur_line, start, chosen);
-                c.position.column = start + static_cast<int>(chosen.size());
+                if (chosen.size() >= 2 && chosen.ends_with("()")) {
+                    c.position.column = start + static_cast<int>(chosen.size()) - 1;
+                } else {
+                    c.position.column = start + static_cast<int>(chosen.size());
+                }
                 c.ClearSelection();
             }
         }
@@ -1724,7 +2521,6 @@ void EditorView::RenderAutocomplete(ImVec2 origin, float line_height, float char
     bool need_scrollbar = (ac_suggestions_.size() > 8);
     float target_h;
     if (!need_scrollbar) {
-        // Generous vertical room so all items fit cleanly without any scrollbar appearing!
         target_h = static_cast<float>(ac_suggestions_.size()) * row_h + 20.0f;
     } else {
         target_h = 8.5f * row_h + 20.0f;
@@ -1758,23 +2554,22 @@ void EditorView::RenderAutocomplete(ImVec2 origin, float line_height, float char
                 icon       = " H";
                 icon_color = ImVec4(0.4f, 0.8f, 0.9f, 1.0f);
             } else {
-                // Heuristic: looks like function if it was in fn_symbols (has parens nearby)
-                // We distinguish by checking if name has lowercase+underscore style (common for functions)
-                bool looks_like_fn = sug.find('_') != std::string::npos &&
-                                     std::islower(static_cast<unsigned char>(sug[0]));
-                bool looks_like_kw = std::all_of(sug.begin(), sug.end(),
+                bool is_method = (sug.size() >= 2 && sug.ends_with("()"));
+                bool looks_like_fn = is_method || (sug.find('_') != std::string::npos &&
+                                     std::islower(static_cast<unsigned char>(sug[0])));
+                bool looks_like_kw = !is_method && std::all_of(sug.begin(), sug.end(),
                     [](char ch){ return std::islower(static_cast<unsigned char>(ch)) || ch == '_'; }) &&
                     sug.size() <= 12;
 
                 if (looks_like_fn) {
-                    icon       = " f";
-                    icon_color = ImVec4(0.9f, 0.7f, 0.3f, 1.0f);  // amber — function
+                    icon       = is_method ? " m" : " f";
+                    icon_color = ImVec4(0.9f, 0.7f, 0.3f, 1.0f);  // amber — method/function
                 } else if (looks_like_kw) {
                     icon       = " k";
                     icon_color = ImVec4(0.6f, 0.5f, 0.9f, 1.0f);  // purple — keyword
                 } else {
                     icon       = " v";
-                    icon_color = ImVec4(0.4f, 0.85f, 0.55f, 1.0f); // green — var/type
+                    icon_color = ImVec4(0.4f, 0.85f, 0.55f, 1.0f); // green — var/field/type
                 }
             }
 

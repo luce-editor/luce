@@ -169,6 +169,24 @@ Jeśli repozytorium nie ma jeszcze skonfigurowanego serwera zdalnego `origin`, k
 
 ---
 
+## Git Gutter (Znaczniki na marginesie kodu)
+
+Podczas edycji kodu Luce automatycznie analizuje różnice względem `HEAD` repozytorium i wyświetla czytelne wskaźniki na lewym marginesie numerów linii:
+- **Zielony pasek**: Nowo dodane linie do pliku.
+- **Niebieski pasek**: Zmodyfikowane linie w porównaniu do wersji w commicie.
+- **Czerwony trójkąt**: Znacznik usuniętych linii wskazujący precyzyjne miejsce wykasowania kodu.
+Znaczniki odświeżają się w tle podczas pisania oraz zapisu pliku na dysk.
+
+---
+
+## Wizualny Diff Viewer (Podgląd różnic)
+
+Kliknięcie przycisku **Diff** obok dowolnego zmienionego lub zaindeksowanego pliku w panelu Source Control (lub wybranie `Git: View File Diff` w Command Palette) otwiera okno podglądu różnic w formacie Unified Diff:
+- **Kolorowanie składni różnic**: Dodane linie (`+`) wyróżnione zielonym tekstem i tłem, usunięte linie (`-`) czerwonym tekstem i tłem, nagłówki chunków (`@@`) w kolorze cyjanowym.
+- **Nagłówek pliku i szybkie akcje**: Bezpośrednie dodanie do indeksu (*Stage*), odświeżenie oraz podgląd pełnej ścieżki pliku.
+
+---
+
 ## Dostępne Komendy w Palecie Poleceń (`Ctrl+Shift+P`)
 
 Wszystkie operacje Git można wywołać bezpośrednio z Command Palette:
@@ -176,6 +194,7 @@ Wszystkie operacje Git można wywołać bezpośrednio z Command Palette:
 | Komenda w Command Palette | Identyfikator | Opis |
 |---|---|---|
 | `View: Toggle Source Control` | `view.toggle_source_control` | Otwiera lub ukrywa panel Source Control |
+| `Git: View File Diff` | `git.view_diff` | Otwiera wizualny podgląd różnic (Diff Viewer) dla bieżącego pliku |
 | `Git: Refresh Status` | `git.refresh` | Wymusza asynchroniczne odświeżenie statusu |
 | `Git: Switch / Checkout Branch...` | `git.branch.switch` | Otwiera okno wyboru i przełączania gałęzi |
 | `Git: Create New Branch...` | `git.branch.create` | Otwiera kreator tworzenia nowej gałęzi |
@@ -193,4 +212,4 @@ Wszystkie operacje Git można wywołać bezpośrednio z Command Palette:
 | `Git: Manage Stashes...` | `git.stash.manage` | Otwiera okno zarządzania schowkami |
 | `Git: Manage Tags...` | `git.tag.manage` | Otwiera okno zarządzania tagami |
 | `Git: Clone Repository...` | `git.clone` | Otwiera kreator klonowania repozytorium |
-| `Git: Show Git Output Log` | `git.output` | Otwiera okno podglądu logów Git |
+| `Git: Show Git Output Log` | `git.output` | Otwiera okno dziennika poleceń Git w czasie rzeczywistym |

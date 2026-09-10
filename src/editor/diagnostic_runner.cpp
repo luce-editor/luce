@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include <thread>
+
 namespace fs = std::filesystem;
 
 namespace luce {
@@ -18,6 +20,17 @@ std::string NormalizePath(std::string p) {
     return p;
 }
 
+bool IsCompilerMissing(const std::string& output) {
+    if (output.empty()) return false;
+    std::string lower = output;
+    std::ranges::transform(lower, lower.begin(), ::tolower);
+    return lower.find("not recognized") != std::string::npos ||
+           lower.find("nie jest rozpoznawan") != std::string::npos ||
+           lower.find("not found") != std::string::npos ||
+           lower.find("cannot find") != std::string::npos ||
+           lower.find("no such file") != std::string::npos;
+}
+
 }  // namespace
 
 std::vector<Diagnostic> DiagnosticRunner::ParseCompilerOutput(const std::string& output, const std::string& target_file) {
@@ -25,11 +38,11 @@ std::vector<Diagnostic> DiagnosticRunner::ParseCompilerOutput(const std::string&
     std::istringstream stream(output);
     std::string line;
 
-    // GCC / Clang / Rustc: file:line:col: (error|warning|fatal error|note): message
-    static const std::regex kGccRegex(R"(^([^:\r\n]+):(\d+):(\d+):\s+(fatal error|error|warning|note):\s+(.*)$)");
+    // GCC / Clang / Rustc: file:line:col: (error|warning|fatal error|note): message (supports Windows C:\ paths)
+    static const std::regex kGccRegex(R"(^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s+(.*)$)");
 
-    // MSVC: file(line): error Cxxxx: message OR file(line,col): error Cxxxx: message
-    static const std::regex kMsvcRegex(R"(^([^(:\r\n]+)\((\d+)(?:,(\d+))?\):\s+(fatal error|error|warning)\s+([A-Za-z0-9]+):\s+(.*)$)");
+    // MSVC: file(line): error Cxxxx: message OR file(line,col): error Cxxxx: message (supports Windows C:\ paths)
+    static const std::regex kMsvcRegex(R"(^(.*?)\s*\((\d+)(?:,(\d+))?\):\s+(fatal error|error|warning)\s+([A-Za-z0-9]+):\s+(.*)$)");
 
     // Python py_compile: File "path", line X
     static const std::regex kPyFileRegex("^\\s*File\\s+\"([^\"]+)\",\\s+line\\s+(\\d+)");
@@ -40,6 +53,12 @@ std::vector<Diagnostic> DiagnosticRunner::ParseCompilerOutput(const std::string&
 
     while (std::getline(stream, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
+
+        // Ignore spurious GCC warning when checking .hpp/.h files directly
+        if (line.find("#pragma once in main file") != std::string::npos ||
+            line.find("-Wpragma-once-outside-header") != std::string::npos) {
+            continue;
+        }
 
         std::smatch match;
 
@@ -117,44 +136,63 @@ void DiagnosticRunner::CheckFile(const std::string& file_path, const std::string
     std::string ext = platform::GetExtension(file_path);
     std::ranges::transform(ext, ext.begin(), ::tolower);
 
-    std::string cwd = working_dir.empty() ? platform::GetDirectory(file_path) : working_dir;
-    std::vector<Diagnostic> diags;
+    std::string file_dir = platform::GetDirectory(file_path);
+    std::string cwd = working_dir.empty() ? file_dir : working_dir;
 
-    if (ext == ".py" || ext == ".pyw") {
-        // Python syntax check
-        std::string cmd = "python -m py_compile \"" + norm_path + "\"";
-        auto res = platform::RunCommand(cmd, cwd);
-        diags = ParseCompilerOutput(res.output, norm_path);
-    } else if (ext == ".cpp" || ext == ".cc" || ext == ".cxx" || ext == ".c") {
-        // C/C++ syntax check: try clang++ then g++ then cl
-        std::string cmd = "clang++ -fsyntax-only -Wall -std=c++20 \"" + norm_path + "\"";
-        auto res = platform::RunCommand(cmd, cwd);
-        if (res.exit_code != 0 && res.output.empty()) {
-            cmd = "g++ -fsyntax-only -Wall -std=c++20 \"" + norm_path + "\"";
-            res = platform::RunCommand(cmd, cwd);
-        }
-        if (res.exit_code != 0 && res.output.empty()) {
-            cmd = "cl.exe /Zs /std:c++20 /nologo \"" + norm_path + "\"";
-            res = platform::RunCommand(cmd, cwd);
-        }
-        diags = ParseCompilerOutput(res.output, norm_path);
-    } else if (ext == ".rs") {
-        // Rust syntax check
-        std::string cmd = "rustc --error-format=short \"" + norm_path + "\"";
-        auto res = platform::RunCommand(cmd, cwd);
-        diags = ParseCompilerOutput(res.output, norm_path);
-    }
+    std::thread([norm_path, ext, file_dir, cwd]() {
+        std::vector<Diagnostic> diags;
 
-    // Fix up relative file paths if compiler printed relative names
-    for (auto& d : diags) {
-        if (!fs::path(d.file_path).is_absolute() && !norm_path.empty()) {
-            if (NormalizePath(platform::GetFilename(d.file_path)) == NormalizePath(platform::GetFilename(norm_path))) {
-                d.file_path = norm_path;
+        if (ext == ".py" || ext == ".pyw") {
+            std::string cmd = "python -m py_compile \"" + norm_path + "\"";
+            auto res = platform::RunCommand(cmd, cwd);
+            diags = ParseCompilerOutput(res.output, norm_path);
+        } else if (ext == ".cpp" || ext == ".cc" || ext == ".cxx" || ext == ".c" ||
+                   ext == ".hpp" || ext == ".h") {
+            bool is_header = (ext == ".hpp" || ext == ".h");
+            std::vector<std::string> candidates = {"g++", "clang++", "cl.exe"};
+
+            for (const auto& comp : candidates) {
+                std::string cmd;
+                if (comp == "cl.exe" || comp == "cl") {
+                    cmd = "cl.exe /Zs /std:c++20 /nologo /I\"" + cwd + "\" /I\"" + file_dir + "\" \"" + norm_path + "\"";
+                } else {
+                    std::string header_flag = is_header ? "-x c++-header -Wno-pragma-once-outside-header " : "";
+                    cmd = comp + " -fsyntax-only -Wall -Wno-pragma-once-outside-header -std=c++20 " + header_flag +
+                          "-I\"" + cwd + "\" -I\"" + file_dir + "\" \"" + norm_path + "\"";
+                }
+
+                auto res = platform::RunCommand(cmd, cwd);
+                if (IsCompilerMissing(res.output)) {
+                    continue; // Try next candidate compiler
+                }
+
+                diags = ParseCompilerOutput(res.output, norm_path);
+                break;
+            }
+        } else if (ext == ".rs") {
+            std::string cmd = "rustc --error-format=short \"" + norm_path + "\"";
+            auto res = platform::RunCommand(cmd, cwd);
+            diags = ParseCompilerOutput(res.output, norm_path);
+        }
+
+        // Fix up relative file paths if compiler printed relative names, and record origin_file
+        for (auto& d : diags) {
+            d.origin_file = norm_path;
+            std::error_code ec;
+            if (!fs::path(d.file_path).is_absolute() && !norm_path.empty()) {
+                if (NormalizePath(platform::GetFilename(d.file_path)) == NormalizePath(platform::GetFilename(norm_path))) {
+                    d.file_path = norm_path;
+                } else if (!file_dir.empty()) {
+                    auto full = fs::path(file_dir) / d.file_path;
+                    d.file_path = NormalizePath(full.lexically_normal().generic_string());
+                }
+            } else {
+                d.file_path = NormalizePath(d.file_path);
             }
         }
-    }
 
-    DiagnosticManager::Instance().SetDiagnosticsForFile(norm_path, diags);
+        DiagnosticManager::Instance().SetDiagnosticsForFile(norm_path, diags);
+    }).detach();
 }
 
 }  // namespace luce

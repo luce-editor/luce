@@ -1,66 +1,59 @@
-# Luce — A Modern Code Editor
+# Luce — Modern, Lightweight Code Editor
 
-**Luce** is a lightweight, GPU-accelerated code editor written in C++23 using [Dear ImGui](https://github.com/ocornut/imgui), [SDL2](https://www.libsdl.org/), and OpenGL 3.3. Inspired by Zed and VS Code, it delivers an ultra-fast, native desktop editing experience with rich SVG file icons, Live Markdown Preview, Emmet snippets, interactive terminal, and an extensible Lua 5.4 scripting plugin system.
+<p align="center">
+  <img src="assets/LuceIcon.png" alt="Luce Logo" width="120" />
+</p>
 
-![Status](https://img.shields.io/badge/status-active%20development-orange)
-![C++](https://img.shields.io/badge/C%2B%2B-23-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
-![License](https://img.shields.io/badge/license-GPLv3-green)
+<p align="center">
+  <strong>Luce</strong> is a lightweight, GPU-accelerated desktop code editor written in <strong>C++23</strong> using <a href="https://github.com/ocornut/imgui">Dear ImGui</a>, <a href="https://www.libsdl.org/">SDL2</a>, and OpenGL 3.3. It delivers a fast, responsive native editing experience with rich SVG file icons, Live Markdown Preview, Git integration, an embedded terminal, and a Lua 5.4 plugin engine.
+</p>
 
----
-
-## Features
-
-- **Modern Visuals & Theme Engine**:
-  - Modern Dark theme, inspired by VS Code Dark Modern.
-  - IBM Plex Sans UI typography & Lilex Code Monospace font.
-  - Native SVG vector icon rasterizer engine with real file & folder icons.
-  - GUI Zoom scaling (`Ctrl + +`, `Ctrl + -`, `Ctrl + 0`).
-- **Syntax Highlighting**:
-  - **C / C++** (C++23 keywords, preprocessor directives, include paths)
-  - **HTML + CSS + JavaScript** (contextual lexer switching)
-  - **Rust** (lifetimes, macros, nested block comments)
-  - **Markdown** (headings, bold, italics, inline code, code blocks)
-  - **CMake** (`CMakeLists.txt` and `*.cmake` scripts)
-- **Live Markdown Preview**:
-  - Side-by-side rich formatted preview with headings, bold text, lists, and code blocks (`Ctrl+Shift+M`).
-- **Emmet HTML Abbreviations**:
-  - Type `!`, `html:5`, `div`, `ul>li`, `table`, or `.class` and press `Tab` to expand boilerplate instantly.
-- **Lua 5.4 Scripting Plugin System**:
-  - Zero-compilation plugin model — write a `.lua` file and drop it into `plugins/` next to the executable.
-  - Full editor API exposed to scripts: insert/delete text, register Command Palette commands, query cursor position and file path.
-  - Isolated `lua_State` per plugin.
-  - Optional `on_tick(dt)` and `on_shutdown()` lifecycle callbacks.
-- **Embedded Terminal & Process Engine**:
-  - Integrated interactive terminal subprocess (`cmd.exe` / `powershell` / `bash`).
-- **File Explorer & Workspace**:
-  - File tree view with root workspace header, folder context actions (New File, New Folder, Rename, Delete).
-  - One-click Explorer Refresh button.
-  - Session state persistence in `session.json` across app restarts.
-- **Command Palette & Quick Open**:
-  - `Ctrl+Shift+P` for actions, `Ctrl+P` for fuzzy file search, `Ctrl+G` for Go to Line.
-- **Multi-Cursor Editing**:
-  - `Ctrl+Click` to place multiple carets, `Ctrl+D` to select next occurrence.
+<p align="center">
+  <a href="https://github.com/luce-editor/luce/releases"><img src="https://img.shields.io/badge/Release-v0.1.0-blue" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B" alt="C++23" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey" alt="Platform" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-green" alt="License" /></a>
+  <a href="https://luce-editor.github.io/luce/"><img src="https://img.shields.io/badge/Docs-Website-blueviolet" alt="Documentation" /></a>
+</p>
 
 ---
 
-## Quick Start
+## Highlights
 
-### Requirements
+- ⚡ **GPU-Accelerated Native Engine**: Ultra-low latency, virtual scrolling, and high frame rates powered by Dear ImGui (docking branch) and OpenGL 3.3.
+- 🎨 **Modern Dark Aesthetics**: Sleek dark color palette, native SVG vector icons for files and folders, and crisp monospace typography (Lilex & IBM Plex Sans).
+- 🪟 **Drag & Drop & Split View**: Side-by-side editing (`Ctrl+\`), smooth tab reordering, and intuitive drop zones across editor panes and file tree.
+- 📜 **Live Markdown Preview**: Side-by-side formatted preview with headings, bold text, lists, and code blocks (`Ctrl+Shift+M`).
+- 🌿 **Git Gutter & Visual Diff Viewer**: Line-by-line diff markers in the gutter (added, modified, deleted) and built-in syntax-highlighted unified diff viewer.
+- 🔍 **Command Palette & Project Search**: Fast fuzzy file finder (`Ctrl+P`), command palette (`Ctrl+Shift+P`), and project-wide search (`Ctrl+Shift+F`) with instant line jumping.
+- 💻 **Embedded Terminal**: Multi-tab terminal with VT100 emulation running PowerShell, Command Prompt, or Bash (`Ctrl+` `).
+- 🔌 **Extensible Lua 5.4 Plugin Engine**: Script custom commands, document lifecycle hooks (`before_save`, `text_changed`), diagnostics/linters, and custom autocomplete providers with zero compilation needed.
+- 🔤 **Syntax Highlighting & Emmet**: Handcrafted deterministic lexers for C/C++, Rust, HTML/CSS/JS, Markdown, CMake, and HTML Emmet expansion (`Tab`).
 
-- **CMake** 3.20+
-- **C++23** compiler (MSVC 2022 v17.10+, GCC 13+, or Clang 16+)
-- **OpenGL 3.3+** compatible GPU
-- **Git** (for automatic FetchContent dependency resolution)
+---
 
-### Building on Windows
+## Installation & Download
+
+### Windows
+
+Pre-built binaries are available in the [GitHub Releases](https://github.com/luce-editor/luce/releases) section:
+
+- **Windows Installer (`Luce-Setup-x64.exe`)**:
+  - Per-user installation (no administrator privileges required).
+  - Windows Explorer context menu integration (*"Open with Luce"*).
+  - Adds `luce` to system `PATH` for quick terminal launching (`luce .`).
+  - Desktop and Start Menu shortcuts.
+- **Portable Package (`Luce-win64-portable.zip`)**:
+  - Run directly without installation. Settings and sessions are stored portably next to the executable.
+
+### Building from Source
 
 ```powershell
-# Clone the repository
-git clone https://github.com/your-username/luce.git
+# Clone repository
+git clone https://github.com/luce-editor/luce.git
 cd luce
 
-# Configure and build
+# Configure and build Release
 cmake -B build
 cmake --build build --config Release
 
@@ -68,66 +61,25 @@ cmake --build build --config Release
 .\build\Release\luce.exe
 ```
 
-### Building on Linux
-
-```bash
-# Install dependencies (Ubuntu/Debian)
-sudo apt update
-sudo apt install -y build-essential cmake libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
-
-# Configure and build
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-
-# Run
-./build/luce
-```
-
----
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+N` | New file |
-| `Ctrl+O` | Open file |
-| `Ctrl+S` | Save file |
-| `Ctrl+W` | Close active tab |
-| `Ctrl+P` | Quick Open (Search project files) |
-| `Ctrl+Shift+P` | Command Palette |
-| `Ctrl+Shift+M` | Toggle Markdown Live Preview |
-| `Ctrl+G` | Go to line number |
-| `Ctrl+F` | Find in file |
-| `Ctrl+H` | Replace in file |
-| `Ctrl+D` | Select next occurrence |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
-| `Ctrl+/` | Toggle comment |
-| `Ctrl+Tab` | Switch to next tab |
-| `Ctrl+` | Toggle terminal |
-| `Ctrl+=` / `Ctrl+-` | Zoom In / Zoom Out GUI |
-| `Ctrl+0` | Reset Zoom to 100% |
-| `Tab` | Expand Emmet abbreviation (HTML) / Indent |
+For Linux build instructions and requirements, see the [Installation Guide](https://luce-editor.github.io/luce/docs/installation).
 
 ---
 
 ## Documentation
 
-Detailed documentation is available on the [Luce Documentation Site](https://luce-editor.github.io/luce/).
+Full documentation, guides, and tutorials are available on the [Luce Documentation Site](https://luce-editor.github.io/luce/):
 
-- [Getting Started](https://luce-editor.github.io/luce/docs/intro)
-- [Creating a Lua Plugin](https://luce-editor.github.io/luce/docs/plugins/creating-a-plugin)
-- [Lua Plugin API Reference](https://luce-editor.github.io/luce/docs/plugins/api-reference)
-- [Architecture & Design Guidelines](.agents/AGENTS.md)
+- 📖 [Getting Started](https://luce-editor.github.io/luce/docs/intro)
+- 💾 [Installation & Setup](https://luce-editor.github.io/luce/docs/installation)
+- ⌨️ [Keyboard Shortcuts Reference](https://luce-editor.github.io/luce/docs/interface/keyboard-shortcuts)
+- 🧩 [Lua Plugin Development](https://luce-editor.github.io/luce/docs/plugins/creating-a-plugin)
+- 📚 [Lua API Reference](https://luce-editor.github.io/luce/docs/plugins/api-reference)
+- 🏗️ [Engine Architecture](https://luce-editor.github.io/luce/docs/architecture)
 
 ---
 
 ## License
 
-This repository contains components licensed under different terms:
-
-- **Luce code editor** is licensed under the [GNU General Public License v3.0](LICENSE)
-- **Documentation website** is licensed under the [MIT License](docs-site/LICENSE)
-- **Icons** (`assets/icons`):
-  - The icons are derived from [vscode-icons](https://github.com/vscode-icons/vscode-icons) project and are licensed under the [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license.
-  - UI Icons (such as `delete.svg`) are from [Material Icons](https://fonts.google.com/icons) by Google, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
-  - Any branded icons/logos included belong to the copyright and trademark owners
+- **Luce Code Editor**: Licensed under [GNU General Public License v3.0 (GPLv3)](LICENSE).
+- **Documentation Website**: Licensed under the [MIT License](docs-site/LICENSE).
+- **Icons**: Derived from the [vscode-icons](https://github.com/vscode-icons/vscode-icons) project ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)) and Google [Material Icons](https://fonts.google.com/icons) ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)).

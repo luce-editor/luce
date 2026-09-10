@@ -7,133 +7,179 @@ slug: /plugins/api-reference
 
 # Lua Plugin API Reference
 
-All functions available to Lua scripts are exposed in the global `luce` table.
+Luce features a rich, zero-compilation **Lua 5.4 Plugin Architecture (API 2.0)**. Plug-ins can react to editor lifecycle events, modify buffers, register diagnostics/linters, provide autocomplete suggestions, and interact with the host operating system.
+
+All functions are exposed under the global `luce` table.
 
 ---
 
-## Plugin Metadata
+## Plugin Structure & Packages
 
-An optional table defining metadata shown in the Plugins panel:
+Luce supports two plugin distribution formats in the `plugins/` directory:
+1. **Single-file script**: `plugins/my_plugin.lua`
+2. **Directory package**: `plugins/my_package/init.lua` (with optional `manifest.json` or sub-modules)
+
+Plugins can be dynamically reloaded or toggled enabled/disabled at runtime from the **Plugins** sidebar tab.
+
+---
+
+## Event Hooks (`luce.on`)
+
+Register callback functions for editor lifecycle events:
 
 ```lua
-luce.plugin = {
-    name        = "My Plugin",       -- shown in the Plugins panel
-    version     = "1.0.0",           -- version string
-    author      = "Your Name",       -- author
-    description = "What this plugin does.",
-}
+luce.on(event_name, callback)
 ```
 
----
+| Event Name | Callback Arguments | Description |
+|---|---|---|
+| `"file_opened"` | `(filepath)` | Fired immediately after an existing file is loaded into a tab. |
+| `"before_save"` | `(filepath)` | Fired right before buffer is written to disk. Ideal for formatters or headers. |
+| `"after_save"` | `(filepath)` | Fired after successful save. Ideal for background linters or build tools. |
+| `"cursor_moved"`| `(line, column)` | Fired when primary caret moves (0-indexed). |
+| `"text_changed"`| `(start_line, count)` | Fired when text content is modified in the buffer. |
 
-## Commands
-
-### `luce.register_command(id, display_name, fn)`
-
-Registers a command visible in the Command Palette (`Ctrl+Shift+P`).
-
-| Parameter      | Type       | Description                                       |
-|----------------|------------|---------------------------------------------------|
-| `id`           | `string`   | Unique identifier (e.g. `"my_cmd"`)               |
-| `display_name` | `string`   | Name shown in the palette (e.g. `"My: Action"`)   |
-| `fn`           | `function` | Function called when the command is executed      |
-
+### Example: Format On Save
 ```lua
-luce.register_command("say_hi", "My Plugin: Say Hello", function()
-    luce.insert_text("Hello!")
+luce.on("before_save", function(path)
+    -- Remove trailing whitespace across document
+    local text = luce.get_text()
+    local cleaned = text:gsub("[ \t]+\n", "\n")
+    if cleaned ~= text then
+        luce.set_text(cleaned)
+    end
 end)
 ```
 
 ---
 
-## Text Editing
+## Document & Buffer Editing
 
-### `luce.insert_text(text)`
-Inserts the given string at the current cursor position.
+### `luce.get_text() → string`
+Returns the entire text of the active editor buffer.
 
-### `luce.delete_selection()`
-Deletes the currently selected text.
+### `luce.set_text(text)`
+Replaces the entire document buffer (with undo/redo preservation).
 
-### `luce.get_selection() → string`
-Returns the currently selected text. Returns `""` if nothing is selected.
+### `luce.get_line_count() → number`
+Returns the total number of lines in the active document.
 
 ### `luce.get_line(n) → string`
-Returns the text of line number `n` (0-indexed).
+Returns the text of line `n` (0-indexed).
+
+### `luce.set_line(n, text)`
+Sets the text of line `n` (0-indexed).
+
+### `luce.replace_range(start_line, start_col, end_line, end_col, text)`
+Replaces an exact coordinate range with new text.
+
+### `luce.insert_text(text)`
+Inserts text at the current cursor position.
+
+### `luce.delete_selection()`
+Deletes selected text.
+
+### `luce.get_selection() → string`
+Returns the currently selected text.
 
 ---
 
-## Cursor
+## Workspace & File Controls
 
-### `luce.get_cursor_line() → number`
-Returns the current cursor line number (0-indexed).
+### `luce.open_file(path)`
+Opens the specified absolute file path in a new editor tab (or switches to it if already open).
 
-### `luce.get_cursor_column() → number`
-Returns the current cursor column number (0-indexed).
+### `luce.save_file()`
+Saves the currently active document to disk.
 
-### `luce.set_cursor(line, col)`
-Moves the cursor to the given position.
-
----
-
-## File
+### `luce.close_tab()`
+Closes the currently active editor tab.
 
 ### `luce.get_file_path() → string`
-Returns the full path of the currently open file (e.g. `"C:/Projects/app/src/main.cpp"`). Returns `""` if no file is open.
+Returns the absolute path of the open file (e.g. `"C:/Projects/app/main.cpp"`).
 
 ### `luce.get_file_name() → string`
-Returns the file name with extension of the currently open file (e.g. `"main.cpp"` or `"Untitled-1"`). Returns `""` if no editor tab is active.
+Returns the filename with extension (e.g. `"main.cpp"`).
 
 ### `luce.get_file_extension() → string`
-Returns the file extension with leading dot of the currently open file (e.g. `".cpp"` or `".lua"`). Returns `""` if the file has no extension or is untitled.
+Returns the file extension with leading dot (e.g. `".cpp"`).
+
+### `luce.get_workspace_path() → string`
+Returns the root directory path of the currently open project.
+
+### `luce.execute_command(command) → string`
+Runs an external shell command synchronously in the workspace directory and returns its output:
+```lua
+local formatted = luce.execute_command("clang-format src/main.cpp")
+```
 
 ---
 
-## Status & Toast Notifications
+## Commands & Shortcuts
 
-### `luce.set_status(text)`
-Displays a floating Toast notification in the bottom-left corner of the editor (VS Code style) and prints to the console.
+### `luce.register_command(id, display_name, [shortcut], fn)`
+Registers a command visible in the Command Palette (`Ctrl+Shift+P`).
 
-### `luce.show_notification(message, [level], [duration])`
-Displays a bottom-left floating Toast notification with auto-fadeout.
-- `message` (`string`): the notification text.
-- `level` (`string`, optional): `"info"`, `"warn"`, `"error"`, or `"success"` (default: `"info"`).
-- `duration` (`number`, optional): visibility duration in seconds (default: `4.0s`).
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique command identifier (e.g. `"my_plugin.run"`) |
+| `display_name` | `string` | Human-readable title shown in Command Palette |
+| `shortcut` | `string` *(optional)* | Shortcut hint (e.g. `"Ctrl+Alt+F"`) |
+| `fn` | `function` | Handler invoked upon command execution |
 
-### `luce.show_error(text)`
-Displays a red error Toast notification.
+```lua
+luce.register_command("tools.format", "Format Document", "Ctrl+Alt+F", function()
+    luce.show_notification("Formatting document...", "info")
+end)
+```
 
-### `luce.show_warning(text)`
-Displays a yellow warning Toast notification.
+---
 
-### `luce.show_info(text)`
-Displays a blue info Toast notification.
+## Custom Diagnostics API (Linters)
 
-### `luce.log(text)`
-Prints an info message to the console (`[Lua Plugin INFO] ...`).
+Plugins can submit error squiggles and diagnostics directly into Luce's Problems dock panel:
 
-### `luce.warn(text)`
-Prints a warning to the console (`[Lua Plugin WARN] ...`).
+### `luce.add_diagnostic(diag_table)`
+```lua
+luce.add_diagnostic({
+    file     = "C:/Project/src/main.cpp",
+    line     = 42,            -- 1-indexed
+    column   = 5,             -- 1-indexed
+    message  = "Unused variable 'x'",
+    severity = "warning"      -- "error" | "warning" | "info"
+})
+```
+
+### `luce.clear_diagnostics([file_path])`
+Clears diagnostics for a specific file (or all files if no parameter is provided).
+
+---
+
+## Autocomplete Providers
+
+Register language-specific completion suggestion handlers:
+
+```lua
+luce.register_completion_provider(".cpp", function(prefix, line, col)
+    if prefix:sub(1, 1) == "s" then
+        return { "std::string", "std::vector", "size_t", "static_cast<>()" }
+    end
+    return {}
+end)
+```
+
+---
+
+## Toast Notifications & Logging
+
+- `luce.show_notification(message, [level], [duration])`: Displays floating toast notification (`"info"`, `"warn"`, `"error"`, `"success"`).
+- `luce.show_info(msg)` / `luce.show_warning(msg)` / `luce.show_error(msg)`
+- `luce.set_status(msg)`: Sets status bar text.
+- `luce.log(msg)` / `luce.warn(msg)`: Prints formatted diagnostic logs.
 
 ---
 
 ## Lifecycle Callbacks
 
-Optional global functions that Luce will call automatically:
-
-### `function on_tick(dt)`
-Called every frame. `dt` is the time since the last frame in seconds.
-
-```lua
-function on_tick(dt)
-    -- avoid heavy work here — this is a hot path!
-end
-```
-
-### `function on_shutdown()`
-Called when the editor closes (or when the plugin is manually unloaded).
-
-```lua
-function on_shutdown()
-    luce.log("Plugin shutting down.")
-end
-```
+- `function on_tick(dt)`: Called every frame (`dt` is delta time in seconds).
+- `function on_shutdown()`: Called when the editor exits or when plugin is reloaded.

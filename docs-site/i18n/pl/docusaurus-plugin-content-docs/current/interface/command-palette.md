@@ -15,9 +15,28 @@ slug: /interface/command-palette
 
 | Skrót | Tryb | Zastosowanie |
 | :--- | :--- | :--- |
-| `Ctrl+Shift+P` | **Polecenia** | Wyszukiwanie i wykonywanie dowolnych poleceń edytora, motywów oraz wtyczek Lua |
+| `Ctrl+Shift+P` | **Polecenia** | Z prefiksem `>`. Wyszukiwanie i wykonywanie dowolnych poleceń edytora, motywów oraz wtyczek Lua |
 | `Ctrl+P` | **Quick Open** | Błyskawiczne wyszukiwanie rozmyte (fuzzy search) i otwieranie plików z projektu |
-| `Ctrl+G` | **Przejdź do linii** | Skok bezpośrednio do wybranego numeru wiersza (np. `:42`) |
+| `Ctrl+Shift+F` | **Wyszukiwanie w projekcie** | Find in Files w całym projekcie z podglądem linii i bezpośrednim skokiem |
+| `Ctrl+G` | **Przejdź do linii** | Skok bezpośrednio do wybranego numeru wiersza (prefiksem `:`) |
+
+---
+
+## Prompt `>` i Dynamiczne Przełączanie Trybów
+
+Pole tekstowe Command Palette dynamicznie reaguje na wpisywane znaki:
+- **Prefiks `>` dla poleceń**: Otwarcie przez `Ctrl+Shift+P` automatycznie wpisuje znak `>`. Skasowanie `>` przełącza paletę na wyszukiwanie plików (*Quick Open*). Wpisanie `>` na początku ponownie włącza tryb poleceń.
+- **Prefiks `:` dla skoku do linii**: Wpisanie dwukropka aktywuje tryb *Go to Line*.
+- **Prefiks `?` lub `Ctrl+Shift+F` dla wyszukiwania w projekcie**: Przeszukiwanie tekstu we wszystkich plikach roboczych.
+
+---
+
+## Wyszukiwanie w Całym Projekcie (`Ctrl+Shift+F`)
+
+Wciśnięcie `Ctrl+Shift+F` uruchamia **Find in Files**:
+- **Głębokie indeksowanie projektu**: Przeszukuje zawartość plików roboczych z automatycznym pominięciem plików binarnych, `.git`, `build` oraz `node_modules`.
+- **Dwu-wierszowy układ wyników**: Wyświetla relatywną ścieżkę i numer linii na górze, a poniżej czytelny wycinek kodu ze znalezionym tekstem.
+- **Natychmiastowy skok do kodu**: Wybór trafienia klawiszem `Enter` lub myszą natychmiast otwiera plik i precyzyjnie pozycjonuje kursor na wskazanej linii i kolumnie.
 
 ---
 

@@ -295,6 +295,17 @@ void FileExplorer::RenderDirectory(const std::string& path) {
 
         // Draw real SVG folder texture icon
         ImTextureID folder_tex = IconManager::Instance().GetFolderIcon(open);
+
+        // Drag Source for folder
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+            ImGui::SetDragDropPayload("LUCE_FOLDER", dir_path.c_str(), dir_path.size() + 1);
+            if (folder_tex) {
+                ImGui::Image(folder_tex, ImVec2(16, 16));
+                ImGui::SameLine();
+            }
+            ImGui::Text("%s", name.c_str());
+            ImGui::EndDragDropSource();
+        }
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 item_min = ImGui::GetItemRectMin();
         float font_size = ImGui::GetFontSize();
@@ -377,6 +388,18 @@ void FileExplorer::RenderDirectory(const std::string& path) {
         }
 
         ImGui::TreeNodeEx((name + "##file").c_str(), leaf_flags, "     %s", name.c_str());
+
+        // Drag Source for file
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+            ImGui::SetDragDropPayload("LUCE_FILE", file_path.c_str(), file_path.size() + 1);
+            ImTextureID preview_tex = IconManager::Instance().GetIconForFile(name);
+            if (preview_tex) {
+                ImGui::Image(preview_tex, ImVec2(16, 16));
+                ImGui::SameLine();
+            }
+            ImGui::Text("%s", name.c_str());
+            ImGui::EndDragDropSource();
+        }
 
         if (push_col) {
             ImGui::PopStyleColor();

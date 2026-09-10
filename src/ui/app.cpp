@@ -61,10 +61,53 @@ App::App() {
         tab_bar_.OpenFile(path, &theme_manager_.Active());
         SaveSession();
     });
+    command_palette_.SetOnOpenFileAtLine([this](const std::string& path, int line, int col) {
+        tab_bar_.OpenFile(path, &theme_manager_.Active());
+        if (auto* editor = tab_bar_.ActiveEditor()) {
+            int target_line = (line > 0) ? (line - 1) : 0;
+            int target_col  = (col > 0)  ? (col - 1)  : 0;
+            editor->GoToPosition(target_line, target_col);
+            editor->EnsureCursorVisible();
+        }
+        SaveSession();
+    });
     command_palette_.SetOnGoToLine([this](int line) {
         if (auto* editor = tab_bar_.ActiveEditor()) {
-            editor->GoToLine(line);
+            editor->GoToPosition(line, 0);
+            editor->EnsureCursorVisible();
         }
+    });
+
+    // Wire up SymbolIndex, Minimap and Go to Definition on TabBar
+    tab_bar_.SetSymbolIndex(&symbol_index_);
+    tab_bar_.SetMinimapEnabled(show_minimap_);
+    tab_bar_.SetOnGoToDefinition([this](const std::string& path, int line) {
+        tab_bar_.OpenFile(path, &theme_manager_.Active());
+        if (auto* editor = tab_bar_.ActiveEditor()) {
+            editor->GoToLine(line > 0 ? line - 1 : 0);
+            editor->EnsureCursorVisible();
+        }
+        SaveSession();
+    });
+
+    // Wire up plugin event hooks on TabBar
+    tab_bar_.SetOnFileOpened([this](const std::string& path) {
+        if (plugin_manager_) plugin_manager_->OnFileOpened(path);
+    });
+    tab_bar_.SetOnBeforeSave([this](const std::string& path) {
+        if (plugin_manager_) plugin_manager_->OnBeforeSave(path);
+    });
+    tab_bar_.SetOnAfterSave([this](const std::string& path) {
+        if (plugin_manager_) plugin_manager_->OnAfterSave(path);
+    });
+    tab_bar_.SetOnTextChanged([this](int line, int count) {
+        if (plugin_manager_) plugin_manager_->OnTextChanged(line, count);
+    });
+    tab_bar_.SetCompletionProvider([this](const std::string& ext, const std::string& prefix, int line, int col) {
+        if (plugin_manager_) {
+            return plugin_manager_->GetCompletions(ext, prefix, line, col);
+        }
+        return std::vector<std::string>{};
     });
 
     // Restore previous folder and open files FIRST so explorer root is known
@@ -85,7 +128,9 @@ App::App() {
     }
 }
 
-App::~App() = default;
+App::~App() {
+    SaveSession();
+}
 
 ImVec4 App::GetBackgroundColor() const {
     return theme_manager_.Active().background;
@@ -357,11 +402,26 @@ void App::Render() {
                 if (diags.empty()) {
                     ImGui::TextDisabled("No problems have been detected in the workspace.");
                 } else {
+                    ImGui::Text("%zu problem%s", diags.size(), diags.size() == 1 ? "" : "s");
+                    ImGui::SameLine(0, 15.0f);
+                    if (ImGui::SmallButton("Copy All")) {
+                        std::string all_text;
+                        for (const auto& d : diags) {
+                            std::string sev = (d.severity == DiagnosticSeverity::Error) ? "Error" :
+                                              (d.severity == DiagnosticSeverity::Warning) ? "Warning" : "Info";
+                            all_text += "[" + sev + "] " + d.file_path + ":" + std::to_string(d.line) + ":" + std::to_string(d.column) + " - " + d.message + "\n";
+                        }
+                        ImGui::SetClipboardText(all_text.c_str());
+                        toast_manager_.ShowInfo("Copied all problems to clipboard");
+                    }
+                    ImGui::SameLine(0, 12.0f);
+                    ImGui::TextDisabled("(Right-click a problem or press Ctrl+C to copy)");
+
                     if (ImGui::BeginTable("##diagnostics", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY)) {
                         ImGui::TableSetupScrollFreeze(0, 1);
                         ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_WidthStretch);
-                        ImGui::TableSetupColumn("File", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-                        ImGui::TableSetupColumn("Line", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+                        ImGui::TableSetupColumn("File", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                        ImGui::TableSetupColumn("Line", ImGuiTableColumnFlags_WidthFixed, 60.0f);
                         ImGui::TableHeadersRow();
 
                         for (size_t i = 0; i < diags.size(); ++i) {
@@ -381,8 +441,40 @@ void App::Render() {
                             if (ImGui::Selectable(label, false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
                                 tab_bar_.OpenFile(diag.file_path, &theme_manager_.Active());
                                 if (auto* editor = tab_bar_.ActiveEditor()) {
-                                    editor->GoToLine(diag.line);
+                                    editor->GoToLine(diag.line > 0 ? diag.line - 1 : 0);
+                                    editor->EnsureCursorVisible();
                                 }
+                            }
+
+                            // Copy message with Ctrl+C when hovering over row
+                            if (ImGui::IsItemHovered() && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
+                                ImGui::SetClipboardText(diag.message.c_str());
+                                toast_manager_.ShowInfo("Copied error message to clipboard");
+                            }
+
+                            // Right-click context menu to copy
+                            if (ImGui::BeginPopupContextItem(label)) {
+                                if (ImGui::MenuItem("Copy Message", "Ctrl+C")) {
+                                    ImGui::SetClipboardText(diag.message.c_str());
+                                    toast_manager_.ShowInfo("Copied message to clipboard");
+                                }
+                                if (ImGui::MenuItem("Copy Problem (with Location)")) {
+                                    std::string full = diag.file_path + ":" + std::to_string(diag.line) + ":" + std::to_string(diag.column) + " - " + diag.message;
+                                    ImGui::SetClipboardText(full.c_str());
+                                    toast_manager_.ShowInfo("Copied problem to clipboard");
+                                }
+                                ImGui::Separator();
+                                if (ImGui::MenuItem("Copy All Problems")) {
+                                    std::string all_text;
+                                    for (const auto& d : diags) {
+                                        std::string sev = (d.severity == DiagnosticSeverity::Error) ? "Error" :
+                                                          (d.severity == DiagnosticSeverity::Warning) ? "Warning" : "Info";
+                                        all_text += "[" + sev + "] " + d.file_path + ":" + std::to_string(d.line) + ":" + std::to_string(d.column) + " - " + d.message + "\n";
+                                    }
+                                    ImGui::SetClipboardText(all_text.c_str());
+                                    toast_manager_.ShowInfo("Copied all problems to clipboard");
+                                }
+                                ImGui::EndPopup();
                             }
                             
                             ImGui::SameLine();
@@ -419,9 +511,21 @@ void App::Render() {
     // Status bar.
     RenderStatusBar();
 
-    // Per-frame plugin tick.
+    // Per-frame plugin tick and cursor movement tracking
     if (plugin_manager_) {
         plugin_manager_->Tick(ImGui::GetIO().DeltaTime);
+        if (auto* ed = tab_bar_.ActiveEditor()) {
+            if (!ed->GetCursors().cursors.empty()) {
+                const auto& cur = ed->GetCursors().Primary();
+                static int last_cursor_line = -1;
+                static int last_cursor_col  = -1;
+                if (cur.position.line != last_cursor_line || cur.position.column != last_cursor_col) {
+                    last_cursor_line = cur.position.line;
+                    last_cursor_col  = cur.position.column;
+                    plugin_manager_->OnCursorMoved(cur.position.line, cur.position.column);
+                }
+            }
+        }
     }
 
     // Command palette overlay.
@@ -442,8 +546,14 @@ void App::Render() {
     if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_P))
         command_palette_.Open(PaletteMode::Files);
 
+    if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_F))
+        command_palette_.Open(PaletteMode::ProjectSearch);
+
     if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_M))
         tab_bar_.ToggleActiveMarkdownPreview();
+
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Backslash))
+        tab_bar_.ToggleSplitView();
 
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G))
         command_palette_.Open(PaletteMode::GoToLine);
@@ -456,14 +566,24 @@ void App::Render() {
         if (!path.empty()) tab_bar_.OpenFile(path, &theme_manager_.Active());
     }
 
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S))
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
         tab_bar_.SaveActive();
+        SaveSession();
+    }
 
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_W))
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_W)) {
         tab_bar_.CloseTab(tab_bar_.ActiveIndex());
+        SaveSession();
+    }
 
-    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Tab))
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Tab)) {
         tab_bar_.NextTab();
+        SaveSession();
+    }
+
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_M)) {
+        ToggleMinimap();
+    }
 
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_GraveAccent))
         show_terminal_ = !show_terminal_;
@@ -486,6 +606,20 @@ void App::Render() {
     if (io.KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_0) || ImGui::IsKeyPressed(ImGuiKey_Keypad0))) {
         ResetZoom();
         SaveSession();
+    }
+
+    // Go to Definition shortcuts
+    if (ImGui::IsKeyPressed(ImGuiKey_F12)) {
+        if (auto* editor = tab_bar_.ActiveEditor()) {
+            editor->GoToDefinition();
+        }
+    }
+    if (io.KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))) {
+        if (auto* editor = tab_bar_.ActiveEditor()) {
+            if (editor->HasHoveredSymbol()) {
+                editor->GoToDefinition();
+            }
+        }
     }
 }
 
@@ -582,6 +716,7 @@ void App::RenderMenuBar() {
             if (ImGui::MenuItem("Close Project")) {
                 file_explorer_.SetRoot("");
                 command_palette_.SetProjectFiles({});
+                symbol_index_.Clear();
                 SaveSession();
             }
             if (ImGui::MenuItem("Close Window",    "Alt+F4"))        wants_quit_ = true;
@@ -605,6 +740,12 @@ void App::RenderMenuBar() {
             ImGui::MenuItem("Explorer",   nullptr, &show_file_explorer_);
             ImGui::MenuItem("Plugins",    nullptr, &show_plugins_);
             ImGui::MenuItem("Terminal",   "Ctrl+`", &show_terminal_);
+            if (ImGui::MenuItem("Minimap", "Ctrl+M", show_minimap_)) {
+                ToggleMinimap();
+            }
+            if (ImGui::MenuItem("Toggle Split Editor", "Ctrl+\\", tab_bar_.IsSplitView())) {
+                tab_bar_.ToggleSplitView();
+            }
             if (ImGui::MenuItem("New Terminal", "Ctrl+Shift+T")) {
                 terminal_.NewTerminal();
             }
@@ -617,6 +758,7 @@ void App::RenderMenuBar() {
                     bool selected = (name == theme_manager_.Active().name);
                     if (ImGui::MenuItem(name.c_str(), nullptr, selected)) {
                         theme_manager_.SetTheme(name);
+                        SaveSession();
                     }
                 }
                 ImGui::Separator();
@@ -692,9 +834,17 @@ void App::RenderMenuBar() {
             if (plugins.empty()) {
                 ImGui::TextDisabled("  No plugins loaded. Place .lua scripts in plugins/ folder.");
             } else {
-                for (const auto& p : plugins) {
+                for (size_t i = 0; i < plugins.size(); ++i) {
+                    const auto& p = plugins[i];
+                    bool enabled = p->IsEnabled();
+                    std::string chk_label = "##plugin_en_" + std::to_string(i);
+                    if (ImGui::Checkbox(chk_label.c_str(), &enabled)) {
+                        plugin_manager_->SetPluginEnabled(i, enabled);
+                    }
+                    ImGui::SameLine();
                     const auto& info = p->GetInfo();
-                    ImGui::BulletText("%s v%s  —  %s",
+                    ImVec4 name_col = enabled ? ImVec4(0.9f, 0.9f, 0.9f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+                    ImGui::TextColored(name_col, "%s v%s  —  %s",
                         info.name.c_str(),
                         info.version.c_str(),
                         info.description.empty() ? "" : info.description.c_str());
@@ -1402,6 +1552,86 @@ void App::RenderGitModals() {
         ImGui::EndChild();
         ImGui::EndPopup();
     }
+
+    RenderGitDiffModal();
+}
+
+void App::ShowGitDiffModal(const std::string& path) {
+    git_diff_file_ = path;
+    git_diff_content_ = GitManager::Instance().GetFileDiff(path);
+    show_git_diff_modal_ = true;
+}
+
+void App::RenderGitDiffModal() {
+    if (show_git_diff_modal_) {
+        ImGui::OpenPopup("Git Diff##modal");
+        show_git_diff_modal_ = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(750.0f * ui_scale_, 520.0f * ui_scale_), ImGuiCond_Appearing);
+
+    if (ImGui::BeginPopupModal("Git Diff##modal", nullptr, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1.0f, 1.0f), "Diff: %s", git_diff_file_.c_str());
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 200.0f);
+
+        if (ImGui::Button("Refresh")) {
+            git_diff_content_ = GitManager::Instance().GetFileDiff(git_diff_file_);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Stage")) {
+            GitManager::Instance().StageFile(git_diff_file_);
+            git_diff_content_ = GitManager::Instance().GetFileDiff(git_diff_file_);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close", ImVec2(60.0f, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::BeginChild("##git_diff_scroll", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+        if (font_editor_) ImGui::PushFont(font_editor_);
+
+        std::istringstream iss(git_diff_content_);
+        std::string line;
+        while (std::getline(iss, line)) {
+            ImVec4 text_col = theme_manager_.Active().foreground;
+            ImU32 bg_col = 0;
+
+            if (line.starts_with("+++") || line.starts_with("---") || line.starts_with("diff ") || line.starts_with("index ")) {
+                text_col = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+            } else if (line.starts_with("@@")) {
+                text_col = ImVec4(0.3f, 0.8f, 0.95f, 1.0f);
+                bg_col = IM_COL32(20, 50, 70, 70);
+            } else if (line.starts_with("+")) {
+                text_col = ImVec4(0.35f, 0.88f, 0.45f, 1.0f);
+                bg_col = IM_COL32(30, 80, 45, 75);
+            } else if (line.starts_with("-")) {
+                text_col = ImVec4(0.95f, 0.4f, 0.4f, 1.0f);
+                bg_col = IM_COL32(95, 30, 30, 75);
+            }
+
+            if (bg_col != 0) {
+                ImVec2 p_min = ImGui::GetCursorScreenPos();
+                float line_h = ImGui::GetTextLineHeight();
+                float full_w = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    p_min,
+                    ImVec2(p_min.x + (std::max)(full_w, ImGui::CalcTextSize(line.c_str()).x + 20.0f), p_min.y + line_h),
+                    bg_col
+                );
+            }
+
+            ImGui::TextColored(text_col, "%s", line.c_str());
+        }
+
+        if (font_editor_) ImGui::PopFont();
+        ImGui::EndChild();
+        ImGui::EndPopup();
+    }
 }
 
 void App::RenderSourceControl() {
@@ -1875,7 +2105,7 @@ void App::RenderSourceControl() {
                 ImGui::TextColored(col, "%c", code);
                 ImGui::SameLine();
 
-                float item_btn_w = 22.0f;
+                float item_btn_w = 64.0f;
                 float item_right = ImGui::GetWindowContentRegionMax().x - item_btn_w - 4.0f;
                 float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
                 if (sel_w < 10.0f) sel_w = 10.0f;
@@ -1895,6 +2125,12 @@ void App::RenderSourceControl() {
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
 
                 ImGui::SameLine(item_right);
+                if (ImGui::SmallButton("Diff##staged_diff")) {
+                    ShowGitDiffModal(item.path);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("View Diff");
+
+                ImGui::SameLine();
                 if (ImGui::SmallButton("-##unstage_one")) {
                     git.UnstageFile(item.path);
                 }
@@ -1936,7 +2172,7 @@ void App::RenderSourceControl() {
                 ImGui::TextColored(col, "%c", code);
                 ImGui::SameLine();
 
-                float item_btns_w = 46.0f;
+                float item_btns_w = 88.0f;
                 float item_right = ImGui::GetWindowContentRegionMax().x - item_btns_w - 4.0f;
                 float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
                 if (sel_w < 10.0f) sel_w = 10.0f;
@@ -1956,6 +2192,12 @@ void App::RenderSourceControl() {
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
 
                 ImGui::SameLine(item_right);
+                if (ImGui::SmallButton("Diff##change_diff")) {
+                    ShowGitDiffModal(item.path);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("View Diff");
+
+                ImGui::SameLine();
                 if (ImGui::SmallButton("+##stage_one")) {
                     git.StageFile(item.path);
                 }
@@ -2069,6 +2311,9 @@ void App::RenderStatusBar() {
 // ── Commands ──────────────────────────────────────────────────────────────
 
 void App::RegisterCommands() {
+    command_palette_.RegisterCommand({"file.search_project", "Search in Project Files (Find in Files)", "Ctrl+Shift+F", [this]() {
+        command_palette_.Open(PaletteMode::ProjectSearch);
+    }});
     command_palette_.RegisterCommand({"file.new", "New File", "Ctrl+N", [this]() {
         tab_bar_.NewFile(&theme_manager_.Active());
     }});
@@ -2086,6 +2331,7 @@ void App::RegisterCommands() {
             terminal_.SetWorkingDirectory(folder);
             ScanProjectFiles();
             GitManager::Instance().SetRepoPath(folder);
+            SaveSession();
         }
     }});
     command_palette_.RegisterCommand({"view.toggle_terminal", "Toggle Terminal", "Ctrl+`", [this]() {
@@ -2102,6 +2348,9 @@ void App::RegisterCommands() {
             show_plugins_ = false;
             GitManager::Instance().RefreshAsync();
         }
+    }});
+    command_palette_.RegisterCommand({"view.toggle_split", "View: Toggle Split Editor", "Ctrl+\\", [this]() {
+        tab_bar_.ToggleSplitView();
     }});
     command_palette_.RegisterCommand({"git.refresh", "Git: Refresh Status", "", [this]() {
         GitManager::Instance().RefreshAsync();
@@ -2215,6 +2464,13 @@ void App::RegisterCommands() {
     command_palette_.RegisterCommand({"git.output", "Git: Show Git Output Log", "", [this]() {
         show_git_output_modal_ = true;
     }});
+    command_palette_.RegisterCommand({"git.view_diff", "Git: View File Diff", "", [this]() {
+        if (auto* tab = tab_bar_.ActiveTab()) {
+            if (!tab->filepath.empty()) {
+                ShowGitDiffModal(tab->filepath);
+            }
+        }
+    }});
     command_palette_.RegisterCommand({"tools.check_diagnostics", "Diagnostics: Check Active File", "Ctrl+Shift+B", [this]() {
         if (auto* tab = tab_bar_.ActiveTab()) {
             if (!tab->filepath.empty()) {
@@ -2286,9 +2542,14 @@ void App::RegisterCommands() {
         SaveSession();
     }});
 
+    command_palette_.RegisterCommand({"view.toggle_minimap", "View: Toggle Minimap", "Ctrl+M", [this]() {
+        ToggleMinimap();
+    }});
+
     for (auto& name : theme_manager_.GetThemeNames()) {
         command_palette_.RegisterCommand({"theme." + name, "Theme: " + name, "", [this, name]() {
             theme_manager_.SetTheme(name);
+            SaveSession();
         }});
     }
 
@@ -2297,6 +2558,12 @@ void App::RegisterCommands() {
         // Note: For newly added themes to appear in the palette without restarting,
         // we'd need to clear and re-register commands. For now, this just reloads the CSS 
         // files and applies any changes to the CURRENT custom theme instantly.
+    }});
+
+    command_palette_.RegisterCommand({"editor.goto_definition", "Editor: Go to Definition", "F12 / Ctrl+Enter", [this]() {
+        if (auto* editor = tab_bar_.ActiveEditor()) {
+            editor->GoToDefinition();
+        }
     }});
 }
 
@@ -2309,7 +2576,8 @@ void App::ScanProjectFiles() {
     if (root.empty()) return;
 
     std::error_code ec;
-    for (auto& entry : fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec)) {
+    auto iter = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+    for (const auto& entry : iter) {
         if (ec) break;
         if (!entry.is_regular_file()) continue;
 
@@ -2335,6 +2603,15 @@ void App::ScanProjectFiles() {
 
     std::ranges::sort(files);
     command_palette_.SetProjectFiles(files);
+    command_palette_.SetProjectRoot(root);
+    symbol_index_.Clear();
+    symbol_index_.IndexDirectoryAsync(root);
+}
+
+void App::SetMinimapEnabled(bool enabled) {
+    show_minimap_ = enabled;
+    tab_bar_.SetMinimapEnabled(show_minimap_);
+    SaveSession();
 }
 
 void App::LoadSession() {
@@ -2347,6 +2624,11 @@ void App::LoadSession() {
     try {
         json j;
         file >> j;
+
+        if (j.contains("theme") && j["theme"].is_string()) {
+            std::string th_name = j["theme"].get<std::string>();
+            theme_manager_.SetTheme(th_name);
+        }
 
         if (j.contains("folder") && j["folder"].is_string()) {
             std::string saved_folder = j["folder"].get<std::string>();
@@ -2361,7 +2643,41 @@ void App::LoadSession() {
             SetScale(j["scale"].get<float>());
         }
 
-        if (j.contains("files") && j["files"].is_array()) {
+        if (j.contains("show_minimap") && j["show_minimap"].is_boolean()) {
+            show_minimap_ = j["show_minimap"].get<bool>();
+            tab_bar_.SetMinimapEnabled(show_minimap_);
+        }
+
+        if (j.contains("show_terminal") && j["show_terminal"].is_boolean()) {
+            show_terminal_ = j["show_terminal"].get<bool>();
+        }
+
+        if (j.contains("show_file_explorer") && j["show_file_explorer"].is_boolean()) {
+            show_file_explorer_ = j["show_file_explorer"].get<bool>();
+        }
+
+        if (j.contains("show_source_control") && j["show_source_control"].is_boolean()) {
+            show_source_control_ = j["show_source_control"].get<bool>();
+        }
+
+        if (j.contains("tabs") && j["tabs"].is_array()) {
+            for (const auto& item : j["tabs"]) {
+                if (item.is_object() && item.contains("path") && item["path"].is_string()) {
+                    std::string f = item["path"].get<std::string>();
+                    if (fs::exists(f)) {
+                        tab_bar_.OpenFile(f, &theme_manager_.Active());
+                        if (auto* ed = tab_bar_.ActiveEditor()) {
+                            int line = item.value("line", 0);
+                            int col = item.value("col", 0);
+                            ed->GoToLine(line);
+                            if (!ed->GetCursors().cursors.empty()) {
+                                ed->GetCursors().Primary().position.column = col;
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (j.contains("files") && j["files"].is_array()) {
             for (const auto& item : j["files"]) {
                 if (item.is_string()) {
                     std::string f = item.get<std::string>();
@@ -2370,6 +2686,10 @@ void App::LoadSession() {
                     }
                 }
             }
+        }
+
+        if (j.contains("active_tab") && j["active_tab"].is_number_integer()) {
+            tab_bar_.SetActiveIndex(j["active_tab"].get<int>());
         }
     } catch (...) {
         // Ignore corrupted session file
@@ -2384,14 +2704,30 @@ void App::SaveSession() {
     json j;
     j["folder"] = file_explorer_.Root();
     j["scale"] = ui_scale_;
+    j["theme"] = theme_manager_.Active().name;
+    j["show_minimap"] = show_minimap_;
+    j["show_terminal"] = show_terminal_;
+    j["show_file_explorer"] = show_file_explorer_;
+    j["show_source_control"] = show_source_control_;
+    j["active_tab"] = tab_bar_.ActiveIndex();
 
-    std::vector<std::string> files;
+    json tabs_arr = json::array();
     for (const auto& tab : tab_bar_.GetTabs()) {
         if (tab && !tab->filepath.empty()) {
-            files.push_back(tab->filepath);
+            json tab_obj;
+            tab_obj["path"] = tab->filepath;
+            const auto& cursors = tab->editor.GetCursors();
+            if (!cursors.cursors.empty()) {
+                tab_obj["line"] = cursors.Primary().position.line;
+                tab_obj["col"] = cursors.Primary().position.column;
+            } else {
+                tab_obj["line"] = 0;
+                tab_obj["col"] = 0;
+            }
+            tabs_arr.push_back(tab_obj);
         }
     }
-    j["files"] = files;
+    j["tabs"] = tabs_arr;
 
     file << j.dump(4);
 }

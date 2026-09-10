@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Package Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Determine Version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.event.inputs.version }}"
+          if (-not $ver) {
+            $ver = "${{ github.ref_name }}"
+          }
+          if (-not $ver -or $ver -eq "main" -or $ver -eq "master") {
+            $ver = "v0.1.0"
+          }
+          $cleanVer = $ver.TrimStart('v')
+          echo "APP_VERSION=$cleanVer" >> $env:GITHUB_ENV
+          echo "RELEASE_TAG=$ver" >> $env:GITHUB_ENV
+          Write-Host "Releasing version $ver ($cleanVer)"
+
+      - name: Configure CMake
+        run: >
+          cmake -B build
+          -A x64
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Luce (Release)
+        run: cmake --build build --config Release --parallel
+
+      - name: Compile Inno Setup Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$env:APP_VERSION" installer\luce_setup.iss
+          $installerPath = "build\installer\Luce-Setup-x64.exe"
+          $renamedInstaller = "build\installer\Luce-Setup-$env:RELEASE_TAG-x64.exe"
+          Move-Item $installerPath $renamedInstaller
+          Write-Host "Created: $renamedInstaller"
+
+      - name: Create Portable ZIP Archive
+        shell: pwsh
+        run: |
+          $portableDir = "build\portable\Luce"
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+          Copy-Item "build\Release\luce.exe" $portableDir
+          Copy-Item -Recurse "build\Release\assets" $portableDir
+          Copy-Item -Recurse "build\Release\themes" $portableDir
+          Copy-Item -Recurse "build\Release\plugins" $portableDir
+          Copy-Item "LICENSE" $portableDir
+          Copy-Item "README.md" $portableDir
+
+          $zipOutput = "build\installer\Luce-$env:RELEASE_TAG-win64-portable.zip"
+          Compress-Archive -Path "build\portable\Luce" -DestinationPath $zipOutput -CompressionLevel Optimal
+          Write-Host "Created: $zipOutput"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Luce ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            build/installer/Luce-Setup-*.exe
+            build/installer/Luce-*-win64-portable.zip

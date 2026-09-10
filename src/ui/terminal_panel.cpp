@@ -584,6 +584,28 @@ void TerminalPanel::Render(const Theme& theme) {
 
     }
     ImGui::EndChild();
+
+    // Drag & Drop target for terminal window
+    if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+        if (payload && (payload->IsDataType("LUCE_FILE") || payload->IsDataType("LUCE_FOLDER"))) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_FILE")) {
+                std::string path(static_cast<const char*>(p->Data));
+                if (path.find(' ') != std::string::npos) {
+                    path = "\"" + path + "\"";
+                }
+                current.process.Write(path);
+            } else if (const ImGuiPayload* p2 = ImGui::AcceptDragDropPayload("LUCE_FOLDER")) {
+                std::string path(static_cast<const char*>(p2->Data));
+                if (path.find(' ') != std::string::npos) {
+                    path = "\"" + path + "\"";
+                }
+                current.process.Write(path);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     ImGui::PopStyleColor(); // Text
     ImGui::PopStyleColor(); // ChildBg
 }

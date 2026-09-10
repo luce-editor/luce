@@ -11,6 +11,7 @@
 #include "ui/theme.h"
 #include "ui/toast_manager.h"
 #include "plugin/plugin_manager.h"
+#include "editor/symbol_index.h"
 
 #include <string>
 #include <memory>
@@ -60,7 +61,13 @@ public:
     CommandPalette& GetCommandPalette() { return command_palette_; }
     FileExplorer& GetFileExplorer() { return file_explorer_; }
     class ToastManager& GetToastManager() { return toast_manager_; }
+    SymbolIndex& GetSymbolIndex() { return symbol_index_; }
+    void SaveSession();
     void TriggerSaveSession() { SaveSession(); }
+
+    bool IsMinimapEnabled() const { return show_minimap_; }
+    void SetMinimapEnabled(bool enabled);
+    void ToggleMinimap() { SetMinimapEnabled(!show_minimap_); }
 
     struct ConfirmationModal {
         bool request_open = false;
@@ -90,11 +97,12 @@ private:
     void RenderStatusBar();
     void RenderSourceControl();
     void RenderGitModals();
+    void ShowGitDiffModal(const std::string& path);
+    void RenderGitDiffModal();
     void SetupDockspace();
 
     // ── Session persistence ──────────────────────────────────────────────
     void LoadSession();
-    void SaveSession();
 
     // ── Command registration ──────────────────────────────────────────────
     void RegisterCommands();
@@ -132,8 +140,13 @@ private:
     bool              show_git_tags_modal_    = false;
     bool              show_git_clone_modal_   = false;
     bool              show_git_output_modal_  = false;
+    bool              show_git_diff_modal_    = false;
+    std::string       git_diff_file_;
+    std::string       git_diff_content_;
     bool              git_view_as_tree_       = false;
+    bool              show_minimap_           = true;
 
+    SymbolIndex       symbol_index_;
     ConfirmationModal confirm_modal_;
 };
 

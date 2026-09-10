@@ -46,9 +46,20 @@ public:
     /// Call luce.on_shutdown() if defined, then close the Lua VM.
     void Shutdown();
 
+    /// Dispatch an event hook registered with luce.on("event_name", fn).
+    void DispatchEvent(const std::string& event_name);
+    void DispatchEvent(const std::string& event_name, const std::string& str_arg);
+    void DispatchEvent(const std::string& event_name, int int_arg1, int int_arg2);
+
+    /// Query completion providers registered via luce.register_completion_provider.
+    std::vector<std::string> GetCompletions(const std::string& ext, const std::string& prefix, int line, int col);
+
     const LuaPluginInfo& GetInfo() const { return info_; }
     const std::string&   GetPath() const { return path_; }
     bool                 IsLoaded() const { return L_ != nullptr; }
+
+    bool                 IsEnabled() const { return enabled_; }
+    void                 SetEnabled(bool enabled) { enabled_ = enabled; }
 
 private:
     /// Register the 'luce' table of editor API functions into L_.
@@ -57,6 +68,7 @@ private:
     lua_State*   L_    = nullptr;
     LuaPluginInfo info_;
     std::string   path_;
+    bool          enabled_      = true;
     bool          has_tick_     = false;
     bool          has_shutdown_ = false;
 };
