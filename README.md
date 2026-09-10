@@ -20,15 +20,15 @@
 
 ## Highlights
 
-- ⚡ **GPU-Accelerated Native Engine**: Ultra-low latency, virtual scrolling, and high frame rates powered by Dear ImGui (docking branch) and OpenGL 3.3.
-- 🎨 **Modern Dark Aesthetics**: Sleek dark color palette, native SVG vector icons for files and folders, and crisp monospace typography (Lilex & IBM Plex Sans).
-- 🪟 **Drag & Drop & Split View**: Side-by-side editing (`Ctrl+\`), smooth tab reordering, and intuitive drop zones across editor panes and file tree.
-- 📜 **Live Markdown Preview**: Side-by-side formatted preview with headings, bold text, lists, and code blocks (`Ctrl+Shift+M`).
-- 🌿 **Git Gutter & Visual Diff Viewer**: Line-by-line diff markers in the gutter (added, modified, deleted) and built-in syntax-highlighted unified diff viewer.
-- 🔍 **Command Palette & Project Search**: Fast fuzzy file finder (`Ctrl+P`), command palette (`Ctrl+Shift+P`), and project-wide search (`Ctrl+Shift+F`) with instant line jumping.
-- 💻 **Embedded Terminal**: Multi-tab terminal with VT100 emulation running PowerShell, Command Prompt, or Bash (`Ctrl+` `).
-- 🔌 **Extensible Lua 5.4 Plugin Engine**: Script custom commands, document lifecycle hooks (`before_save`, `text_changed`), diagnostics/linters, and custom autocomplete providers with zero compilation needed.
-- 🔤 **Syntax Highlighting & Emmet**: Handcrafted deterministic lexers for C/C++, Rust, HTML/CSS/JS, Markdown, CMake, and HTML Emmet expansion (`Tab`).
+- **GPU-Accelerated Native Engine**: Ultra-low latency, virtual scrolling, and high frame rates powered by Dear ImGui (docking branch) and OpenGL 3.3.
+- **Modern Dark Aesthetics**: Sleek dark color palette, native SVG vector icons for files and folders, and crisp monospace typography (Lilex & IBM Plex Sans).
+- **Drag & Drop & Split View**: Side-by-side editing (`Ctrl+\`), smooth tab reordering, and intuitive drop zones across editor panes and file tree.
+- **Live Markdown Preview**: Side-by-side formatted preview with headings, bold text, lists, and code blocks (`Ctrl+Shift+M`).
+- **Git Gutter & Visual Diff Viewer**: Line-by-line diff markers in the gutter (added, modified, deleted) and built-in syntax-highlighted unified diff viewer.
+- **Command Palette & Project Search**: Fast fuzzy file finder (`Ctrl+P`), command palette (`Ctrl+Shift+P`), and project-wide search (`Ctrl+Shift+F`) with instant line jumping.
+- **Embedded Terminal**: Multi-tab terminal with VT100 emulation running PowerShell, Command Prompt, or Bash (`Ctrl+` `).
+- **Extensible Lua 5.4 Plugin Engine**: Script custom commands, document lifecycle hooks (`before_save`, `text_changed`), diagnostics/linters, and custom autocomplete providers with zero compilation needed.
+- **Syntax Highlighting & Emmet**: Handcrafted deterministic lexers for C/C++, Rust, HTML/CSS/JS, Markdown, CMake, and HTML Emmet expansion (`Tab`).
 
 ---
 
@@ -69,12 +69,12 @@ For Linux build instructions and requirements, see the [Installation Guide](http
 
 Full documentation, guides, and tutorials are available on the [Luce Documentation Site](https://luce-editor.github.io/luce/):
 
-- 📖 [Getting Started](https://luce-editor.github.io/luce/docs/intro)
-- 💾 [Installation & Setup](https://luce-editor.github.io/luce/docs/installation)
-- ⌨️ [Keyboard Shortcuts Reference](https://luce-editor.github.io/luce/docs/interface/keyboard-shortcuts)
-- 🧩 [Lua Plugin Development](https://luce-editor.github.io/luce/docs/plugins/creating-a-plugin)
-- 📚 [Lua API Reference](https://luce-editor.github.io/luce/docs/plugins/api-reference)
-- 🏗️ [Engine Architecture](https://luce-editor.github.io/luce/docs/architecture)
+- [Getting Started](https://luce-editor.github.io/luce/docs/intro)
+- [Installation & Setup](https://luce-editor.github.io/luce/docs/installation)
+- [Keyboard Shortcuts Reference](https://luce-editor.github.io/luce/docs/interface/keyboard-shortcuts)
+- [Lua Plugin Development](https://luce-editor.github.io/luce/docs/plugins/creating-a-plugin)
+- [Lua API Reference](https://luce-editor.github.io/luce/docs/plugins/api-reference)
+- [Engine Architecture](https://luce-editor.github.io/luce/docs/architecture)
 
 ---
 
