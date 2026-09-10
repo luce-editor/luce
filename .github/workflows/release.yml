@@ -24,6 +24,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
 
       - name: Determine Version
         shell: pwsh
@@ -36,9 +40,9 @@ jobs:
             $ver = "v0.1.0"
           }
           $cleanVer = $ver.TrimStart('v')
-          echo "APP_VERSION=$cleanVer" >> $env:GITHUB_ENV
-          echo "RELEASE_TAG=$ver" >> $env:GITHUB_ENV
-          Write-Host "Releasing version $ver ($cleanVer)"
+          "APP_VERSION=$cleanVer" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_TAG=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Target Version: $ver (Clean: $cleanVer)"
 
       - name: Configure CMake
         run: >
@@ -52,7 +56,7 @@ jobs:
       - name: Compile Inno Setup Installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$env:APP_VERSION" installer\luce_setup.iss
+          iscc /DMyAppVersion="$env:APP_VERSION" installer\luce_setup.iss
           $installerPath = "build\installer\Luce-Setup-x64.exe"
           $renamedInstaller = "build\installer\Luce-Setup-$env:RELEASE_TAG-x64.exe"
           Move-Item $installerPath $renamedInstaller
@@ -75,13 +79,13 @@ jobs:
           Write-Host "Created: $zipOutput"
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: Luce ${{ env.RELEASE_TAG }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            build/installer/Luce-Setup-*.exe
-            build/installer/Luce-*-win64-portable.zip
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $installer = "build\installer\Luce-Setup-$env:RELEASE_TAG-x64.exe"
+          $zip = "build\installer\Luce-$env:RELEASE_TAG-win64-portable.zip"
+          gh release create "$env:RELEASE_TAG" $installer $zip `
+            --title "Luce $env:RELEASE_TAG" `
+            --generate-notes `
+            --target "${{ github.sha }}"
