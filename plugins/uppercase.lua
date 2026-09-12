@@ -11,6 +11,7 @@ luce.plugin = {
     version     = "1.0.0",
     author      = "Luce Team",
     description = "Converts the current text selection to UPPERCASE.",
+    icon        = "🔤",
 }
 
 local function uppercase_selection()

@@ -24,6 +24,7 @@ struct LuaPluginInfo {
     std::string version     = "1.0.0";
     std::string author      = "Unknown";
     std::string description = "";
+    std::string icon        = "";
 };
 
 class LuaPlugin {

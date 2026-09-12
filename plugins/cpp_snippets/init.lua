@@ -9,6 +9,7 @@ luce.plugin = {
     version     = "1.0.0",
     author      = "Luce Team",
     description = "Provides smart C++ autocompletion snippets.",
+    icon        = "cpp",
 }
 
 local snippets = {

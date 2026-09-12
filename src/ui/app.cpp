@@ -170,8 +170,8 @@ void App::Render() {
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.1f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.2f));
         
-        ImVec2 cursor_start = ImGui::GetCursorPos();
-        ImGui::SetCursorPos(ImVec2(cursor_start.x + 8.0f * ui_scale_, cursor_start.y + 4.0f * ui_scale_));
+        ImGui::Dummy(ImVec2(0.0f, 4.0f * ui_scale_));
+        ImGui::SetCursorPosX(8.0f * ui_scale_);
 
         ImVec2 active_btn_min(0, 0);
         ImVec2 active_btn_max(0, 0);
@@ -247,133 +247,7 @@ void App::Render() {
         } else if (show_source_control_) {
             RenderSourceControl();
         } else if (show_plugins_) {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "INSTALLED PLUGINS");
-
-            float icon_sz = 14.0f * ui_scale_;
-            float btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
-            float right_x = ImGui::GetWindowContentRegionMax().x - btn_w - 4.0f;
-            if (right_x > ImGui::GetCursorPosX()) {
-                ImGui::SameLine(right_x);
-            } else {
-                ImGui::SameLine();
-            }
-
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
-
-            ImTextureID refresh_icon = IconManager::Instance().GetIconByName("refresh");
-            if (refresh_icon) {
-                if (ImGui::ImageButton("##plugins_reload_top", refresh_icon, ImVec2(icon_sz, icon_sz))) {
-                    plugin_manager_->ReloadPlugins();
-                    toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
-                }
-            } else {
-                if (ImGui::SmallButton("↻##plugins_reload_top")) {
-                    plugin_manager_->ReloadPlugins();
-                    toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
-                }
-            }
-            ImGui::PopStyleColor(3);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reload Plugins");
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-            
-            const auto& plugins = plugin_manager_->GetLoadedPlugins();
-            if (plugins.empty()) {
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-                ImGui::TextDisabled("No Lua plugins installed.");
-                ImGui::Spacing();
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-                ImGui::TextWrapped("Drop .lua files into the plugins/ folder next to luce.exe and click Reload.");
-            } else {
-                std::optional<size_t> plugin_to_uninstall;
-                for (size_t i = 0; i < plugins.size(); ++i) {
-                    const auto& p = plugins[i];
-                    const auto& info = p->GetInfo();
-                    ImGui::PushID((int)i);
-                    
-                    // Plugin icon
-                    ImTextureID item_icon = IconManager::Instance().GetIconByName("folder_type_plugin");
-                    if (item_icon) {
-                        ImGui::Image(item_icon, ImVec2(40, 40));
-                    } else {
-                        ImGui::ColorButton("##icon", ImVec4(0.4f, 0.2f, 0.8f, 1.0f), ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(40, 40));
-                    }
-                    ImGui::SameLine();
-                    
-                    ImGui::BeginGroup();
-                    
-                    float top_y = ImGui::GetCursorPosY();
-
-                    // Name and version
-                    if (font_bold_) ImGui::PushFont(font_bold_);
-                    ImGui::Text("%s", info.name.c_str());
-                    if (font_bold_) ImGui::PopFont();
-                    
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("v%s", info.version.c_str());
-                    
-                    // Uninstall icon right aligned
-                    ImTextureID delete_icon = IconManager::Instance().GetIconByName("delete");
-                    if (delete_icon) {
-                        float icon_size_px = 16.0f;
-                        float btn_w = icon_size_px + ImGui::GetStyle().FramePadding.x * 2.0f;
-                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - btn_w);
-                        ImGui::SetCursorPosY(top_y - ImGui::GetStyle().FramePadding.y);
-                        
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 0.3f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.2f, 0.2f, 0.5f));
-                        if (ImGui::ImageButton("##uninstall", delete_icon, ImVec2(icon_size_px, icon_size_px))) {
-                            plugin_to_uninstall = i;
-                        }
-                        ImGui::PopStyleColor(3);
-                    } else {
-                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 65.0f);
-                        if (ImGui::Button("Unload")) {
-                            plugin_to_uninstall = i;
-                        }
-                    }
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Unload plugin (does not delete the .lua file)");
-                    
-                    // Author
-                    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%s", info.author.c_str());
-                    
-                    // Description
-                    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + ImGui::GetContentRegionAvail().x - 8.0f);
-                    ImGui::TextWrapped("%s", info.description.empty() ? "No description provided." : info.description.c_str());
-                    ImGui::PopTextWrapPos();
-                    
-                    ImGui::EndGroup();
-                    
-                    ImGui::Spacing();
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    
-                    ImGui::PopID();
-                }
-                
-                if (plugin_to_uninstall) {
-                    plugin_manager_->UninstallPlugin(*plugin_to_uninstall, false);
-                }
-            }
-            
-            ImGui::Spacing();
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
-            if (ImGui::Button("Reload Plugins")) {
-                plugin_manager_->ReloadPlugins();
-                toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Open Plugins Folder")) {
-                platform::OpenInFileExplorer(platform::GetExecutableDir() + "/plugins");
-            }
+            RenderPluginsPanel();
         }
 
         ImGui::End();
@@ -1637,23 +1511,389 @@ void App::RenderGitDiffModal() {
     }
 }
 
+void App::RenderPluginIcon(const LuaPluginInfo& info, float size) {
+    ImTextureID icon_tex = 0;
+    if (!info.icon.empty()) {
+        icon_tex = IconManager::Instance().GetIconByName(info.icon);
+        if (!icon_tex && fs::exists(info.icon)) {
+            icon_tex = IconManager::Instance().GetTexture(info.icon, false);
+        }
+    }
+
+    if (icon_tex) {
+        ImGui::Image(icon_tex, ImVec2(size, size));
+    } else if (!info.icon.empty() && info.icon.size() <= 16 && (unsigned char)info.icon[0] >= 0x80) {
+        // UTF-8 emoji string!
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), IM_COL32(38, 42, 50, 255), 6.0f);
+        dl->AddRect(p, ImVec2(p.x + size, p.y + size), IM_COL32(65, 70, 82, 255), 6.0f, 0, 1.0f);
+
+        ImVec2 text_sz = ImGui::CalcTextSize(info.icon.c_str());
+        ImVec2 text_pos(p.x + (size - text_sz.x) * 0.5f, p.y + (size - text_sz.y) * 0.5f);
+        dl->AddText(text_pos, IM_COL32(255, 255, 255, 255), info.icon.c_str());
+
+        ImGui::Dummy(ImVec2(size, size));
+    } else {
+        // Fallback to default plugin folder icon
+        ImTextureID fallback = IconManager::Instance().GetIconByName("folder_type_plugin");
+        if (fallback) {
+            ImGui::Image(fallback, ImVec2(size, size));
+        } else {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), IM_COL32(36, 40, 48, 255), 6.0f);
+            dl->AddRect(p, ImVec2(p.x + size, p.y + size), IM_COL32(60, 65, 78, 255), 6.0f, 0, 1.0f);
+            ImVec2 text_sz = ImGui::CalcTextSize("🧩");
+            ImVec2 text_pos(p.x + (size - text_sz.x) * 0.5f, p.y + (size - text_sz.y) * 0.5f);
+            dl->AddText(text_pos, IM_COL32(255, 255, 255, 255), "🧩");
+            ImGui::Dummy(ImVec2(size, size));
+        }
+    }
+}
+
+void App::RenderPluginsPanel() {
+    float pad = 8.0f;
+
+    // Header section
+    ImGui::Spacing();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.60f, 1.0f));
+    const auto& plugins = plugin_manager_->GetLoadedPlugins();
+    std::string header_text = "INSTALLED PLUGINS (" + std::to_string(plugins.size()) + ")";
+    ImGui::TextUnformatted(header_text.c_str());
+    ImGui::PopStyleColor();
+
+    float icon_sz = 14.0f * ui_scale_;
+    float btn_w = icon_sz + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float right_x = ImGui::GetWindowContentRegionMax().x - btn_w - pad;
+    if (right_x > ImGui::GetCursorPosX()) {
+        ImGui::SameLine(right_x);
+    } else {
+        ImGui::SameLine();
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
+
+    ImTextureID refresh_icon = IconManager::Instance().GetIconByName("refresh");
+    if (refresh_icon) {
+        if (ImGui::ImageButton("##plugins_reload_top", refresh_icon, ImVec2(icon_sz, icon_sz))) {
+            plugin_manager_->ReloadPlugins();
+            toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
+        }
+    } else {
+        if (ImGui::SmallButton("↻##plugins_reload_top")) {
+            plugin_manager_->ReloadPlugins();
+            toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
+        }
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reload All Plugins");
+
+    ImGui::Spacing();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (plugins.empty()) {
+        // Modern Empty State
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float content_w = (avail_w - pad * 2.0f > 120.0f) ? (avail_w - pad * 2.0f) : 120.0f;
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImTextureID p_icon = IconManager::Instance().GetIconByName("folder_type_plugin");
+        if (p_icon) {
+            ImGui::Image(p_icon, ImVec2(22.0f, 22.0f));
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.92f, 0.94f, 1.0f));
+        ImGui::TextUnformatted("Lua Plugins");
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.62f, 0.64f, 0.68f, 1.0f));
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_w);
+        ImGui::TextWrapped("No Lua plugins currently loaded. Drop .lua files or plugin folders into the plugins/ directory next to luce.exe.");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.44f, 0.72f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.52f, 0.82f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.36f, 0.62f, 1.0f));
+        if (ImGui::Button("Open Plugins Folder", ImVec2(content_w, 32.0f))) {
+            platform::OpenInFileExplorer(platform::GetExecutableDir() + "/plugins");
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(2);
+        return;
+    }
+
+    // Scrollable area for plugin cards, reserving space for fixed bottom action bar
+    float bottom_bar_h = 44.0f;
+    ImGui::BeginChild("##plugins_scroll_list", ImVec2(0, -bottom_bar_h), false);
+
+    std::optional<size_t> plugin_to_uninstall;
+
+    float list_avail_w = ImGui::GetContentRegionAvail().x;
+    float card_pad = 6.0f;
+    float card_w = list_avail_w - card_pad * 2.0f;
+    if (card_w < 100.0f) card_w = 100.0f;
+
+    for (size_t i = 0; i < plugins.size(); ++i) {
+        const auto& p = plugins[i];
+        const auto& info = p->GetInfo();
+        ImGui::PushID((int)i);
+
+        ImGui::SetCursorPosX(card_pad);
+        ImVec2 card_top_left = ImGui::GetCursorScreenPos();
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->ChannelsSplit(2);
+        dl->ChannelsSetCurrent(1);
+
+        // Card content group
+        ImGui::BeginGroup();
+
+        // Top inside padding
+        ImGui::Dummy(ImVec2(card_w, 6.0f));
+
+        // Row with Icon and details
+        float inner_pad = 8.0f;
+        ImGui::SetCursorPosX(card_pad + inner_pad);
+        float plugin_icon_size = 36.0f;
+        RenderPluginIcon(info, plugin_icon_size);
+
+        ImGui::SameLine(0.0f, 10.0f);
+
+        ImGui::BeginGroup();
+
+        // Line 1: Header row with Name + Version + Delete button
+        if (font_bold_) ImGui::PushFont(font_bold_);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.97f, 1.0f));
+        ImGui::TextUnformatted(info.name.c_str());
+        ImGui::PopStyleColor();
+        if (font_bold_) ImGui::PopFont();
+
+        ImGui::SameLine(0.0f, 6.0f);
+
+        // Small version pill
+        std::string ver_str = "v" + info.version;
+        ImVec2 ver_sz = ImGui::CalcTextSize(ver_str.c_str());
+        ImVec2 v_pos = ImGui::GetCursorScreenPos();
+        dl->AddRectFilled(ImVec2(v_pos.x - 3.0f, v_pos.y), ImVec2(v_pos.x + ver_sz.x + 3.0f, v_pos.y + ver_sz.y + 1.0f), IM_COL32(50, 54, 66, 200), 3.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.72f, 0.78f, 1.0f));
+        ImGui::TextUnformatted(ver_str.c_str());
+        ImGui::PopStyleColor();
+
+        // Right-aligned delete button in header row
+        float del_btn_size = 14.0f;
+        float del_target_x = card_top_left.x + card_w - inner_pad - del_btn_size;
+        float current_cursor_x = ImGui::GetCursorScreenPos().x;
+        if (del_target_x > current_cursor_x) {
+            ImGui::SameLine(0.0f, del_target_x - current_cursor_x);
+        } else {
+            ImGui::SameLine();
+        }
+
+        ImTextureID delete_icon = IconManager::Instance().GetIconByName("delete");
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 0.35f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.25f, 0.25f, 0.6f));
+        if (delete_icon) {
+            if (ImGui::ImageButton("##unload_btn", delete_icon, ImVec2(del_btn_size, del_btn_size))) {
+                plugin_to_uninstall = i;
+            }
+        } else {
+            if (ImGui::SmallButton("×##unload_btn")) {
+                plugin_to_uninstall = i;
+            }
+        }
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unload Plugin (keeps file on disk)");
+
+        // Line 2: Author
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.65f, 0.90f, 1.0f));
+        ImGui::TextUnformatted(info.author.c_str());
+        ImGui::PopStyleColor();
+
+        // Line 3: Description wrapped
+        float desc_avail_w = card_w - inner_pad * 2.0f - plugin_icon_size - 18.0f;
+        if (desc_avail_w > 30.0f) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.67f, 0.72f, 1.0f));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + desc_avail_w);
+            ImGui::TextWrapped("%s", info.description.empty() ? "No description provided." : info.description.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndGroup(); // text group
+
+        // Bottom inside padding
+        ImGui::Dummy(ImVec2(card_w, 6.0f));
+
+        ImGui::EndGroup(); // card group
+
+        // Calculate bounding box for card
+        ImVec2 actual_card_max = ImGui::GetItemRectMax();
+        ImVec2 card_max = ImVec2(card_top_left.x + card_w, actual_card_max.y);
+
+        bool is_card_hovered = ImGui::IsMouseHoveringRect(card_top_left, card_max);
+
+        dl->ChannelsSetCurrent(0);
+        ImU32 card_bg = is_card_hovered ? IM_COL32(36, 40, 48, 220) : IM_COL32(30, 32, 38, 180);
+        ImU32 card_border = is_card_hovered ? IM_COL32(75, 82, 98, 230) : IM_COL32(52, 56, 68, 160);
+
+        dl->AddRectFilled(card_top_left, card_max, card_bg, 6.0f);
+        dl->AddRect(card_top_left, card_max, card_border, 6.0f, 0, 1.0f);
+
+        dl->ChannelsMerge();
+
+        // Natural ImGui vertical spacing between cards - NO SetCursorScreenPos needed!
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        ImGui::PopID();
+    }
+
+    if (plugin_to_uninstall) {
+        plugin_manager_->UninstallPlugin(*plugin_to_uninstall, false);
+    }
+
+    ImGui::EndChild(); // ##plugins_scroll_list
+
+    // Fixed bottom action bar: Reload Plugins & Open Folder
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    float btn_h = 28.0f;
+    float avail_b = ImGui::GetContentRegionAvail().x;
+    float half_w = (avail_b - pad * 2.0f - 6.0f) * 0.5f;
+
+    const char* reload_lbl = (half_w < 85.0f) ? "Reload" : "Reload Plugins";
+    const char* folder_lbl = (half_w < 85.0f) ? "Folder" : "Open Folder";
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.17f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.24f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.30f, 0.35f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.88f, 0.90f, 1.0f));
+
+    ImGui::SetCursorPosX(pad);
+    if (ImGui::Button(reload_lbl, ImVec2(half_w, btn_h))) {
+        plugin_manager_->ReloadPlugins();
+        toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reload all plugins from disk");
+
+    ImGui::SameLine(0.0f, 6.0f);
+    if (ImGui::Button(folder_lbl, ImVec2(half_w, btn_h))) {
+        platform::OpenInFileExplorer(platform::GetExecutableDir() + "/plugins");
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open plugins folder in File Explorer");
+
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(3);
+    ImGui::Spacing();
+}
+
 void App::RenderSourceControl() {
     auto& git = GitManager::Instance();
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
 
     if (!git.HasRepo()) {
-        ImGui::TextDisabled("No Git repository found in open workspace.");
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float pad = 12.0f;
+        float content_w = (avail_w - pad * 2.0f > 120.0f) ? (avail_w - pad * 2.0f) : 120.0f;
+
         ImGui::Spacing();
-        if (ImGui::Button("Initialize Repository")) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.60f, 1.0f));
+        ImGui::TextUnformatted("NO REPOSITORY FOUND");
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Icon + Title
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImTextureID git_icon = IconManager::Instance().GetIconByName("file_type_git");
+        if (git_icon) {
+            ImGui::Image(git_icon, ImVec2(22.0f, 22.0f));
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.92f, 0.94f, 1.0f));
+        ImGui::TextUnformatted("Source Control");
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.62f, 0.64f, 0.68f, 1.0f));
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_w);
+        ImGui::TextWrapped("No Git repository found in the open workspace. Initialize a repository or clone from remote to track changes.");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Button styles: rounded corners & padding
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+
+        // Primary Button: Initialize Repository
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.44f, 0.72f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.52f, 0.82f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.36f, 0.62f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+        if (ImGui::Button("Initialize Repository", ImVec2(content_w, 32.0f))) {
             platform::RunCommand("git init", file_explorer_.Root());
             git.RefreshAsync();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Clone Repository...")) {
+        ImGui::PopStyleColor(4);
+
+        ImGui::Spacing();
+
+        // Secondary Button: Clone Repository
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.17f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.24f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.30f, 0.35f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.88f, 0.90f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+        if (ImGui::Button("Clone Repository...", ImVec2(content_w, 32.0f))) {
             show_git_clone_modal_ = true;
         }
+        ImGui::PopStyleVar(); // FrameBorderSize
+        ImGui::PopStyleColor(5);
+
+        ImGui::PopStyleVar(2); // FrameRounding, FramePadding
         return;
     }
+
+    float pad = 10.0f;
+    float avail_w = ImGui::GetContentRegionAvail().x;
+    float content_w = (avail_w - pad * 2.0f > 120.0f) ? (avail_w - pad * 2.0f) : 120.0f;
 
     // Branch selector combo and action buttons
     float icon_sz = 14.0f * ui_scale_;
@@ -1664,8 +1904,15 @@ void App::RenderSourceControl() {
     float branch_text_w = ImGui::CalcTextSize(git.GetBranch().c_str()).x;
     float arrow_w = ImGui::GetFrameHeight();
     float combo_w = branch_text_w + arrow_w + ImGui::GetStyle().FramePadding.x * 2.0f + 6.0f;
-    float max_combo_w = ImGui::GetContentRegionAvail().x - total_right_w - ImGui::GetFrameHeight() - 24.0f;
+    float max_combo_w = content_w - total_right_w - ImGui::GetFrameHeight() - 16.0f;
     if (combo_w > max_combo_w) combo_w = max_combo_w;
+    if (combo_w < 70.0f) combo_w = 70.0f;
+
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.27f, 0.32f, 1.0f));
 
     ImGui::SetNextItemWidth(combo_w);
     if (ImGui::BeginCombo("##git_branch_combo", git.GetBranch().c_str())) {
@@ -1695,13 +1942,16 @@ void App::RenderSourceControl() {
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Branch: %s (click to switch)", git.GetBranch().c_str());
 
-    ImGui::SameLine();
-    if (ImGui::Button("+##git_new_branch")) {
+    ImGui::SameLine(0.0f, 4.0f);
+    if (ImGui::Button("+##git_new_branch", ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()))) {
         show_git_branch_modal_ = true;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Create New Branch...");
 
-    float right_x = ImGui::GetWindowContentRegionMax().x - total_right_w - 4.0f;
+    ImGui::PopStyleColor(); // Border
+    ImGui::PopStyleVar(3); // FrameRounding, FramePadding, FrameBorderSize
+
+    float right_x = ImGui::GetWindowContentRegionMax().x - total_right_w - pad;
     if (right_x > ImGui::GetCursorPosX()) {
         ImGui::SameLine(right_x);
     } else {
@@ -1989,13 +2239,33 @@ void App::RenderSourceControl() {
     // ── Sync Actions (Push & Pull) ──────────────────────────────────────
     int ahead = git.GetAheadCount();
     int behind = git.GetBehindCount();
-    std::string push_btn_label = ahead > 0 ? ("Push  ↑" + std::to_string(ahead)) : "Push";
-    std::string pull_btn_label = behind > 0 ? ("Pull  ↓" + std::to_string(behind)) : "Pull";
+    std::string push_btn_label = ahead > 0 ? ("Push  ↑ " + std::to_string(ahead)) : "Push";
+    std::string pull_btn_label = behind > 0 ? ("Pull  ↓ " + std::to_string(behind)) : "Pull";
 
-    float avail_sync_w = ImGui::GetContentRegionAvail().x;
-    float sync_btn_w = (avail_sync_w - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+    float sync_btn_w = (content_w - 6.0f) * 0.5f;
+    float sync_btn_h = 28.0f;
 
-    if (ImGui::Button(push_btn_label.c_str(), ImVec2(sync_btn_w, 0))) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+    // Push button
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    if (ahead > 0) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.36f, 0.62f, 0.65f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.44f, 0.72f, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.28f, 0.52f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.55f, 0.85f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 1.0f, 1.0f));
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.17f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.24f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.26f, 0.28f, 0.33f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.88f, 1.0f));
+    }
+
+    if (ImGui::Button(push_btn_label.c_str(), ImVec2(sync_btn_w, sync_btn_h))) {
         if (!git.HasRemote("origin")) {
             show_git_remote_modal_ = true;
         } else {
@@ -2014,9 +2284,25 @@ void App::RenderSourceControl() {
             ImGui::SetTooltip("Push local commits to remote (%d unpushed)", ahead);
         }
     }
+    ImGui::PopStyleColor(5);
 
-    ImGui::SameLine();
-    if (ImGui::Button(pull_btn_label.c_str(), ImVec2(sync_btn_w, 0))) {
+    // Pull button
+    ImGui::SameLine(0.0f, 6.0f);
+    if (behind > 0) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.36f, 0.62f, 0.65f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.44f, 0.72f, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.28f, 0.52f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.55f, 0.85f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 1.0f, 1.0f));
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.17f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.24f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.26f, 0.28f, 0.33f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.88f, 1.0f));
+    }
+
+    if (ImGui::Button(pull_btn_label.c_str(), ImVec2(sync_btn_w, sync_btn_h))) {
         if (!git.HasRemote("origin")) {
             show_git_remote_modal_ = true;
         } else {
@@ -2033,8 +2319,11 @@ void App::RenderSourceControl() {
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Pull commits from remote (%d behind)", behind);
     }
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(3); // FrameRounding, FramePadding, FrameBorderSize
 
     ImGui::Spacing();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -2044,8 +2333,15 @@ void App::RenderSourceControl() {
 
     // Commit message input
     static char commit_msg[256] = "";
-    ImGui::SetNextItemWidth(-1);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.27f, 0.32f, 1.0f));
+    ImGui::SetNextItemWidth(content_w);
     ImGui::InputTextWithHint("##commit_msg", "Message (Ctrl+Enter to commit)", commit_msg, sizeof(commit_msg));
+    ImGui::PopStyleColor(); // Border
+    ImGui::PopStyleVar(3); // FrameRounding, FramePadding, FrameBorderSize
 
     bool trigger_commit = false;
     if (ImGui::IsItemFocused() && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Enter)) {
@@ -2053,10 +2349,22 @@ void App::RenderSourceControl() {
     }
 
     ImGui::Spacing();
+
+    // Commit button
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+
     if (!has_staged) {
         ImGui::BeginDisabled();
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.44f, 0.72f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.52f, 0.82f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.36f, 0.62f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     }
-    if (ImGui::Button("Commit", ImVec2(-1, 0)) || (has_staged && trigger_commit)) {
+
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+    if (ImGui::Button("Commit", ImVec2(content_w, 30.0f)) || (has_staged && trigger_commit)) {
         if (strlen(commit_msg) > 0) {
             std::string err;
             if (git.Commit(commit_msg, err)) {
@@ -2070,46 +2378,66 @@ void App::RenderSourceControl() {
             toast_manager_.ShowWarning("Git: Please enter a commit message.");
         }
     }
-    if (!has_staged) {
+
+    if (has_staged) {
+        ImGui::PopStyleColor(4);
+    } else {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
             ImGui::SetTooltip("No staged changes to commit.\nStage files first using '+' next to a file or 'Stage All Changes'.");
         }
     }
+    ImGui::PopStyleVar(2); // FrameRounding, FramePadding
 
     ImGui::Spacing();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
     ImGui::Separator();
     ImGui::Spacing();
+
+    // Subtle collapsing header styling to eliminate the harsh bright blue bar
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.16f, 0.17f, 0.21f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.22f, 0.24f, 0.29f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.19f, 0.21f, 0.26f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 
     // ── Staged Changes ──────────────────────────────────────────────────
     if (!staged.empty()) {
         std::string staged_header = "STAGED CHANGES (" + std::to_string(staged.size()) + ")";
         ImGui::SetNextItemAllowOverlap();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
         bool staged_open = ImGui::CollapsingHeader(staged_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
 
-        float action_w = 20.0f;
-        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
+        float action_w = 22.0f;
+        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - pad;
         if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
+        
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
         if (ImGui::SmallButton("-##unstage_all")) {
             git.UnstageAll();
         }
+        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unstage All Changes");
 
         if (staged_open) {
             for (const auto& item : staged) {
                 ImGui::PushID(item.path.c_str());
-                
-                ImVec4 col = (item.type == GitStatusType::Added) ? ImVec4(0.45f, 0.79f, 0.57f, 1.0f) :
-                             (item.type == GitStatusType::Deleted) ? ImVec4(0.95f, 0.35f, 0.35f, 1.0f) :
-                             ImVec4(0.89f, 0.75f, 0.55f, 1.0f);
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+
+                ImVec4 col = (item.type == GitStatusType::Added) ? ImVec4(0.40f, 0.82f, 0.60f, 1.0f) :
+                             (item.type == GitStatusType::Deleted) ? ImVec4(0.92f, 0.38f, 0.38f, 1.0f) :
+                             ImVec4(0.90f, 0.75f, 0.48f, 1.0f);
                 char code = (item.type == GitStatusType::Added) ? 'A' :
                             (item.type == GitStatusType::Deleted) ? 'D' : 'M';
 
+                ImGui::AlignTextToFramePadding();
                 ImGui::TextColored(col, "%c", code);
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 6.0f);
 
-                float item_btn_w = 64.0f;
-                float item_right = ImGui::GetWindowContentRegionMax().x - item_btn_w - 4.0f;
+                float item_btn_w = 68.0f;
+                float item_right = ImGui::GetWindowContentRegionMax().x - item_btn_w - pad;
                 float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
                 if (sel_w < 10.0f) sel_w = 10.0f;
 
@@ -2128,16 +2456,25 @@ void App::RenderSourceControl() {
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
 
                 ImGui::SameLine(item_right);
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 2.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.20f, 0.24f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
+
                 if (ImGui::SmallButton("Diff##staged_diff")) {
                     ShowGitDiffModal(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("View Diff");
 
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 4.0f);
                 if (ImGui::SmallButton("-##unstage_one")) {
                     git.UnstageFile(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unstage");
+
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar(2);
 
                 ImGui::PopID();
             }
@@ -2148,35 +2485,43 @@ void App::RenderSourceControl() {
     const auto changes = git.GetUnstagedChanges();
     std::string changes_header = "CHANGES (" + std::to_string(changes.size()) + ")";
     ImGui::SetNextItemAllowOverlap();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
     bool changes_open = ImGui::CollapsingHeader(changes_header.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
     if (!changes.empty()) {
-        float action_w = 20.0f;
-        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - 4.0f;
+        float action_w = 22.0f;
+        float right_pos = ImGui::GetWindowContentRegionMax().x - action_w - pad;
         if (right_pos > ImGui::GetCursorPosX()) ImGui::SameLine(right_pos);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
         if (ImGui::SmallButton("+##stage_all")) {
             git.StageAll();
         }
+        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stage All Changes");
     }
 
     if (changes_open) {
         if (changes.empty()) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad + 6.0f);
             ImGui::TextDisabled("No changes detected in working tree.");
         } else {
             for (const auto& item : changes) {
                 ImGui::PushID(item.path.c_str());
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
 
-                ImVec4 col = (item.type == GitStatusType::Untracked) ? ImVec4(0.45f, 0.79f, 0.57f, 1.0f) :
-                             (item.type == GitStatusType::Deleted) ? ImVec4(0.95f, 0.35f, 0.35f, 1.0f) :
-                             ImVec4(0.89f, 0.75f, 0.55f, 1.0f);
+                ImVec4 col = (item.type == GitStatusType::Untracked) ? ImVec4(0.40f, 0.82f, 0.60f, 1.0f) :
+                             (item.type == GitStatusType::Deleted) ? ImVec4(0.92f, 0.38f, 0.38f, 1.0f) :
+                             ImVec4(0.90f, 0.75f, 0.48f, 1.0f);
                 char code = (item.type == GitStatusType::Untracked) ? 'U' :
                             (item.type == GitStatusType::Deleted) ? 'D' : 'M';
 
+                ImGui::AlignTextToFramePadding();
                 ImGui::TextColored(col, "%c", code);
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 6.0f);
 
-                float item_btns_w = 88.0f;
-                float item_right = ImGui::GetWindowContentRegionMax().x - item_btns_w - 4.0f;
+                float item_btns_w = 96.0f;
+                float item_right = ImGui::GetWindowContentRegionMax().x - item_btns_w - pad;
                 float sel_w = item_right - ImGui::GetCursorPosX() - ImGui::GetStyle().ItemSpacing.x;
                 if (sel_w < 10.0f) sel_w = 10.0f;
 
@@ -2195,18 +2540,24 @@ void App::RenderSourceControl() {
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
 
                 ImGui::SameLine(item_right);
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 2.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.20f, 0.24f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.15f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.25f));
+
                 if (ImGui::SmallButton("Diff##change_diff")) {
                     ShowGitDiffModal(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("View Diff");
 
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 4.0f);
                 if (ImGui::SmallButton("+##stage_one")) {
                     git.StageFile(item.path);
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stage");
 
-                ImGui::SameLine();
+                ImGui::SameLine(0.0f, 4.0f);
                 if (ImGui::SmallButton("↺##discard_one")) {
                     std::string file_path = item.path;
                     RequestConfirmation("Discard File Changes",
@@ -2218,10 +2569,16 @@ void App::RenderSourceControl() {
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Discard Changes");
 
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar(2);
+
                 ImGui::PopID();
             }
         }
     }
+
+    ImGui::PopStyleVar(2); // Header FrameRounding, FramePadding
+    ImGui::PopStyleColor(3); // Header colors
 }
 
 // ── Status bar ────────────────────────────────────────────────────────────
@@ -2663,6 +3020,10 @@ void App::LoadSession() {
             show_source_control_ = j["show_source_control"].get<bool>();
         }
 
+        if (j.contains("show_plugins") && j["show_plugins"].is_boolean()) {
+            show_plugins_ = j["show_plugins"].get<bool>();
+        }
+
         if (j.contains("tabs") && j["tabs"].is_array()) {
             for (const auto& item : j["tabs"]) {
                 if (item.is_object() && item.contains("path") && item["path"].is_string()) {
@@ -2712,6 +3073,7 @@ void App::SaveSession() {
     j["show_terminal"] = show_terminal_;
     j["show_file_explorer"] = show_file_explorer_;
     j["show_source_control"] = show_source_control_;
+    j["show_plugins"] = show_plugins_;
     j["active_tab"] = tab_bar_.ActiveIndex();
 
     json tabs_arr = json::array();

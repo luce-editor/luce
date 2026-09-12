@@ -10,6 +10,7 @@ luce.plugin = {
     version     = "1.0.0",
     author      = "Luce Team",
     description = "Inserts the current UTC date/time as a code comment.",
+    icon        = "🕒",
 }
 
 local function insert_timestamp()

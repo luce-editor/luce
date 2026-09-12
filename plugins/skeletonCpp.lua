@@ -9,7 +9,8 @@ luce.plugin = {
     name = "Skeleton",
     version = "1.0.0",
     author = "Luce Team",
-    description = "Inserts basic C++ skeleton"
+    description = "Inserts basic C++ skeleton",
+    icon = "💀",
 }
 
 local function insert_skel()

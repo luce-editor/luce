@@ -10,6 +10,7 @@
 
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvgrast.h"
+#include "stb_image.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -72,19 +73,52 @@ void IconManager::Init(const std::string& icons_directory) {
     ext_to_svg_[".cmake"] = "file_type_cmake.svg";
 }
 
-ImTextureID IconManager::GetTexture(const std::string& svg_filename, bool fallback_to_default) {
-    if (icons_dir_.empty()) return 0;
+ImTextureID IconManager::GetTexture(const std::string& path_or_filename, bool fallback_to_default) {
+    if (path_or_filename.empty()) return 0;
 
-    std::string full_path = icons_dir_ + "/" + svg_filename;
+    std::string full_path = path_or_filename;
+    std::ranges::replace(full_path, '\\', '/');
+
+    if (!fs::exists(full_path)) {
+        if (!icons_dir_.empty()) {
+            full_path = icons_dir_ + "/" + path_or_filename;
+        }
+    }
     if (!fs::exists(full_path)) {
         if (!fallback_to_default) return 0;
-        full_path = icons_dir_ + "/default_file.svg";
+        if (!icons_dir_.empty()) {
+            full_path = icons_dir_ + "/default_file.svg";
+        }
         if (!fs::exists(full_path)) return 0;
     }
 
     auto it = textures_.find(full_path);
     if (it != textures_.end()) {
         return (ImTextureID)(intptr_t)it->second;
+    }
+
+    // Check file extension: is it PNG/JPG or SVG?
+    std::string ext = platform::GetExtension(full_path);
+    std::ranges::transform(ext, ext.begin(), ::tolower);
+
+    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+        int w = 0, h = 0, ch = 0;
+        unsigned char* data = stbi_load(full_path.c_str(), &w, &h, &ch, 4);
+        if (!data) return 0;
+
+        GLuint tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(data);
+
+        textures_[full_path] = tex;
+        return (ImTextureID)(intptr_t)tex;
     }
 
     // Parse at high DPI so internal SVG units map to more pixels
@@ -151,7 +185,20 @@ ImTextureID IconManager::GetFolderIcon(bool is_open) {
 }
 
 ImTextureID IconManager::GetIconByName(const std::string& name) {
-    return GetTexture(name + ".svg", false);
+    if (name.empty()) return 0;
+    if (name.ends_with(".svg") || name.ends_with(".png") || name.ends_with(".jpg")) {
+        ImTextureID t = GetTexture(name, false);
+        if (t) return t;
+    }
+    ImTextureID t = GetTexture(name + ".svg", false);
+    if (t) return t;
+    t = GetTexture("file_type_" + name + ".svg", false);
+    if (t) return t;
+    t = GetTexture("folder_type_" + name + ".svg", false);
+    if (t) return t;
+    t = GetTexture("default_" + name + ".svg", false);
+    if (t) return t;
+    return 0;
 }
 
 }  // namespace luce

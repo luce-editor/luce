@@ -96,6 +96,8 @@ private:
     void RenderMenuBar();
     void RenderStatusBar();
     void RenderSourceControl();
+    void RenderPluginsPanel();
+    void RenderPluginIcon(const LuaPluginInfo& info, float size);
     void RenderGitModals();
     void ShowGitDiffModal(const std::string& path);
     void RenderGitDiffModal();

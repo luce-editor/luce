@@ -9,6 +9,7 @@ luce.plugin = {
     version     = "2.0.0",
     author      = "Luce Team",
     description = "Trims trailing whitespace on all lines before saving.",
+    icon        = "⚡",
 }
 
 luce.on("before_save", function(filepath)

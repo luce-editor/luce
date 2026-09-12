@@ -649,10 +649,39 @@ bool LuaPlugin::Load(const std::string& path, App* app) {
             read_str("version",     info_.version);
             read_str("author",      info_.author);
             read_str("description", info_.description);
+            read_str("icon",        info_.icon);
         }
         lua_pop(L_, 1); // pop luce.plugin
     }
     lua_pop(L_, 1); // pop luce
+
+    // Resolve relative icon path or auto-detect icon in plugin folder
+    if (!info_.icon.empty()) {
+        fs::path ip(info_.icon);
+        if (ip.has_extension() && ip.is_relative()) {
+            fs::path parent_dir = fs::path(path).parent_path();
+            if (fs::exists(parent_dir / ip)) {
+                info_.icon = (parent_dir / ip).string();
+            }
+        }
+    } else {
+        fs::path p(path);
+        fs::path dir = p.parent_path();
+        if (p.filename() == "init.lua" || p.filename() == "main.lua") {
+            if (fs::exists(dir / "icon.svg")) {
+                info_.icon = (dir / "icon.svg").string();
+            } else if (fs::exists(dir / "icon.png")) {
+                info_.icon = (dir / "icon.png").string();
+            }
+        } else {
+            fs::path stem = p.stem();
+            if (fs::exists(dir / (stem.string() + ".svg"))) {
+                info_.icon = (dir / (stem.string() + ".svg")).string();
+            } else if (fs::exists(dir / (stem.string() + ".png"))) {
+                info_.icon = (dir / (stem.string() + ".png")).string();
+            }
+        }
+    }
 
     // Detect optional lifecycle callbacks at the top level.
     lua_getglobal(L_, "on_tick");
