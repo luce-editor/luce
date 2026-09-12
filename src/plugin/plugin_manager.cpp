@@ -94,7 +94,13 @@ bool PluginManager::UninstallPlugin(size_t index, bool delete_file) {
 
     if (delete_file) {
         std::error_code ec;
-        if (!fs::remove(file_path, ec)) {
+        fs::path target(file_path);
+        if (target.filename() == "init.lua") {
+            fs::remove_all(target.parent_path(), ec);
+        } else {
+            fs::remove_all(target, ec);
+        }
+        if (ec) {
             std::cerr << "[PluginManager] Could not delete '" << file_path
                       << "': " << ec.message() << "\n";
             return false;

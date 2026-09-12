@@ -1679,16 +1679,36 @@ void App::RenderPluginsPanel() {
         ImGui::BeginGroup();
 
         // Line 1: Header row with Name + Version + Delete button
+        float del_btn_size = 15.0f;
+        float del_btn_w = del_btn_size + 4.0f; // with 2px padding each side
+        float right_space = del_btn_w + 8.0f;
+        float text_col_w = card_w - inner_pad * 2.0f - plugin_icon_size - 10.0f;
+
+        std::string ver_str = "v" + info.version;
+        float ver_w = ImGui::CalcTextSize(ver_str.c_str()).x + 10.0f;
+        float max_title_w = text_col_w - ver_w - right_space - 6.0f;
+        if (max_title_w < 35.0f) max_title_w = 35.0f;
+
+        std::string title_display = info.name;
+        if (ImGui::CalcTextSize(title_display.c_str()).x > max_title_w) {
+            while (!title_display.empty() && ImGui::CalcTextSize((title_display + "...").c_str()).x > max_title_w) {
+                title_display.pop_back();
+            }
+            title_display += "...";
+        }
+
         if (font_bold_) ImGui::PushFont(font_bold_);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.97f, 1.0f));
-        ImGui::TextUnformatted(info.name.c_str());
+        ImGui::TextUnformatted(title_display.c_str());
         ImGui::PopStyleColor();
         if (font_bold_) ImGui::PopFont();
+        if (title_display != info.name && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", info.name.c_str());
+        }
 
         ImGui::SameLine(0.0f, 6.0f);
 
         // Small version pill
-        std::string ver_str = "v" + info.version;
         ImVec2 ver_sz = ImGui::CalcTextSize(ver_str.c_str());
         ImVec2 v_pos = ImGui::GetCursorScreenPos();
         dl->AddRectFilled(ImVec2(v_pos.x - 3.0f, v_pos.y), ImVec2(v_pos.x + ver_sz.x + 3.0f, v_pos.y + ver_sz.y + 1.0f), IM_COL32(50, 54, 66, 200), 3.0f);
@@ -1697,30 +1717,29 @@ void App::RenderPluginsPanel() {
         ImGui::PopStyleColor();
 
         // Right-aligned delete button in header row
-        float del_btn_size = 14.0f;
-        float del_target_x = card_top_left.x + card_w - inner_pad - del_btn_size;
+        float del_target_x = card_top_left.x + card_w - inner_pad - del_btn_w;
         float current_cursor_x = ImGui::GetCursorScreenPos().x;
-        if (del_target_x > current_cursor_x) {
-            ImGui::SameLine(0.0f, del_target_x - current_cursor_x);
-        } else {
-            ImGui::SameLine();
-        }
+        float spacing_to_del = del_target_x - current_cursor_x;
+        if (spacing_to_del < 4.0f) spacing_to_del = 4.0f;
+        ImGui::SameLine(0.0f, spacing_to_del);
 
         ImTextureID delete_icon = IconManager::Instance().GetIconByName("delete");
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 0.35f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.25f, 0.25f, 0.6f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
         if (delete_icon) {
-            if (ImGui::ImageButton("##unload_btn", delete_icon, ImVec2(del_btn_size, del_btn_size))) {
+            if (ImGui::ImageButton("##del_btn", delete_icon, ImVec2(del_btn_size, del_btn_size))) {
                 plugin_to_uninstall = i;
             }
         } else {
-            if (ImGui::SmallButton("×##unload_btn")) {
+            if (ImGui::SmallButton("×##del_btn")) {
                 plugin_to_uninstall = i;
             }
         }
+        ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unload Plugin (keeps file on disk)");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Uninstall & Delete Plugin from disk");
 
         // Line 2: Author
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.65f, 0.90f, 1.0f));
@@ -1767,7 +1786,23 @@ void App::RenderPluginsPanel() {
     }
 
     if (plugin_to_uninstall) {
-        plugin_manager_->UninstallPlugin(*plugin_to_uninstall, false);
+        size_t idx = *plugin_to_uninstall;
+        if (idx < plugins.size()) {
+            std::string p_name = plugins[idx]->GetInfo().name;
+            RequestConfirmation(
+                "Delete Plugin",
+                "Are you sure you want to uninstall and permanently delete '" + p_name + "' from disk?",
+                "Delete Plugin",
+                ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                [this, idx, p_name]() {
+                    if (plugin_manager_->UninstallPlugin(idx, true)) {
+                        toast_manager_.ShowSuccess("Plugin '" + p_name + "' deleted successfully.");
+                    } else {
+                        toast_manager_.ShowError("Failed to delete plugin files.");
+                    }
+                }
+            );
+        }
     }
 
     ImGui::EndChild(); // ##plugins_scroll_list
