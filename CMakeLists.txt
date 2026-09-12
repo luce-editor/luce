@@ -66,6 +66,19 @@ add_library(vterm STATIC ${VTERM_SOURCES})
 target_include_directories(vterm PUBLIC ${libvterm_SOURCE_DIR}/include ${libvterm_SOURCE_DIR}/src)
 target_compile_definitions(vterm PRIVATE -D_CRT_SECURE_NO_WARNINGS)
 
+# FreeType — font rasterizer supporting color emojis and vector glyphs
+FetchContent_Declare(
+    freetype
+    URL https://github.com/freetype/freetype/archive/refs/tags/VER-2-13-3.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+set(FT_DISABLE_ZLIB TRUE CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 TRUE CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG TRUE CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ TRUE CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI TRUE CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(freetype)
+
 # Dear ImGui (docking branch) — immediate-mode UI with dockable panels
 FetchContent_Declare(
     imgui
@@ -76,7 +89,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 # ImGui has no CMakeLists.txt, so we build it as a static library manually.
-# This includes the core plus the SDL2+OpenGL3 backends.
+# This includes the core plus the SDL2+OpenGL3 backends and FreeType rasterizer.
 add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -85,12 +98,18 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
+    ${imgui_SOURCE_DIR}/misc/freetype
 )
-target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static)
+target_compile_definitions(imgui_lib PUBLIC
+    IMGUI_ENABLE_FREETYPE
+    IMGUI_USE_WCHAR32
+)
+target_link_libraries(imgui_lib PUBLIC freetype SDL2::SDL2-static)
 
 # OpenGL — system-provided
 find_package(OpenGL REQUIRED)

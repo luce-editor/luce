@@ -10,6 +10,10 @@ on:
         description: 'Release version (e.g. v0.1.0)'
         required: false
         default: 'v0.1.0'
+      release_notes:
+        description: 'Release description (optional markdown). If left empty, RELEASE_NOTES.md or automatic template is used.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -82,10 +86,66 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
         run: |
           $installer = "build\installer\Luce-Setup-$env:RELEASE_TAG-x64.exe"
           $zip = "build\installer\Luce-$env:RELEASE_TAG-win64-portable.zip"
-          gh release create "$env:RELEASE_TAG" $installer $zip `
-            --title "Luce $env:RELEASE_TAG" `
-            --generate-notes `
-            --target "${{ github.sha }}"
+
+          $installerHash = (Get-FileHash -Path $installer -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash
+
+          $customNotes = ""
+          if ($env:INPUT_RELEASE_NOTES) {
+            $customNotes = $env:INPUT_RELEASE_NOTES.Trim()
+          }
+
+          $notesContent = ""
+          if ($customNotes) {
+            $notesContent = $customNotes
+          } elseif (Test-Path "RELEASE_NOTES.md") {
+            $notesContent = Get-Content -Raw "RELEASE_NOTES.md"
+          } else {
+            $notesContent = @"
+## Luce $env:RELEASE_TAG
+
+Welcome to the **$env:RELEASE_TAG** release of **Luce** — a lightweight, GPU-accelerated desktop code editor built with C++23 and Dear ImGui.
+
+### 📦 Downloads & Verification
+
+| File | Type | SHA-256 Checksum |
+| :--- | :--- | :--- |
+| **\`Luce-Setup-$env:RELEASE_TAG-x64.exe\`** | Windows Installer | \`$installerHash\` |
+| **\`Luce-$env:RELEASE_TAG-win64-portable.zip\`** | Portable Archive (.zip) | \`$zipHash\` |
+
+### 🚀 Getting Started
+
+- **Windows Installer (\`.exe\`)**:
+  - Automatically installs per-user (no administrator privileges needed).
+  - Adds *"Open with Luce"* to the Windows Explorer context menu.
+  - Adds \`luce\` to system \`PATH\` for quick terminal launching (\`luce .\`).
+  - Creates Desktop and Start Menu shortcuts.
+- **Portable Package (\`.zip\`)**:
+  - Extract anywhere and run \`luce.exe\` directly without installation.
+
+### 📖 Documentation & Resources
+
+- 🌐 [Official Documentation & Website](https://luce-editor.github.io/luce/)
+- ⌨️ [Keyboard Shortcuts Reference](https://luce-editor.github.io/luce/docs/interface/keyboard-shortcuts)
+- 🔌 [Lua Plugin System Architecture](https://luce-editor.github.io/luce/docs/plugins/architecture)
+"@
+          }
+
+          $notesFile = "build\installer\release_body.md"
+          $notesContent | Out-File -FilePath $notesFile -Encoding utf8
+
+          if (gh release view "$env:RELEASE_TAG" 2>$null) {
+            Write-Host "Release $env:RELEASE_TAG already exists, updating description and assets..."
+            gh release edit "$env:RELEASE_TAG" --title "Luce $env:RELEASE_TAG" --notes-file $notesFile
+            gh release upload "$env:RELEASE_TAG" $installer $zip --clobber
+          } else {
+            gh release create "$env:RELEASE_TAG" $installer $zip `
+              --title "Luce $env:RELEASE_TAG" `
+              --notes-file $notesFile `
+              --generate-notes `
+              --target "${{ github.sha }}"
+          }

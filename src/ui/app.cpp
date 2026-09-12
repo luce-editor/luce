@@ -49,6 +49,9 @@ App::App() {
             SaveSession();
         }
     });
+    file_explorer_.SetOnCloneRepository([this]() {
+        show_git_clone_modal_ = true;
+    });
     file_explorer_.SetOnRemoveFolder([this]() {
         file_explorer_.SetRoot("");
         GitManager::Instance().SetRepoPath("");

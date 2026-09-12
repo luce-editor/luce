@@ -42,6 +42,9 @@ std::string GetExecutableDir();
 /// Open a directory or file in the native system file explorer.
 void OpenInFileExplorer(const std::string& path);
 
+/// Open a web URL in the default browser.
+void OpenURL(const std::string& url);
+
 // ── Dynamic library loading (used by future plugin system) ────────────────
 
 using LibraryHandle = void*;

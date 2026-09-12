@@ -22,6 +22,7 @@ public:
     /// Register callbacks.
     void SetOnOpenFile(OpenFileCallback cb)       { on_open_file_ = std::move(cb); }
     void SetOnOpenFolder(ActionCallback cb)       { on_open_folder_ = std::move(cb); }
+    void SetOnCloneRepository(ActionCallback cb) { on_clone_repository_ = std::move(cb); }
     void SetOnRemoveFolder(ActionCallback cb)     { on_remove_folder_ = std::move(cb); }
 
     /// Render the file tree panel.
@@ -37,6 +38,7 @@ private:
     std::string      root_;
     OpenFileCallback on_open_file_;
     ActionCallback   on_open_folder_;
+    ActionCallback   on_clone_repository_;
     ActionCallback   on_remove_folder_;
     char             filter_buf_[128] = {};
 

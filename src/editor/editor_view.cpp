@@ -388,12 +388,16 @@ void EditorView::RenderSelections(ImDrawList* dl, ImVec2 origin, float lh,
         TextPosition end   = cursor.SelectionEnd();
 
         for (int line = std::max(begin.line, first); line <= std::min(end.line, last - 1); ++line) {
+            const std::string& line_str = buffer_->GetLine(line);
             int start_col = (line == begin.line) ? begin.column : 0;
             int end_col   = (line == end.line)   ? end.column
-                                                  : static_cast<int>(buffer_->GetLine(line).size());
+                                                  : static_cast<int>(line_str.size());
 
-            float x1 = origin.x + gw + start_col * cw;
-            float x2 = origin.x + gw + end_col * cw;
+            int s_col = std::min(start_col, static_cast<int>(line_str.size()));
+            int e_col = std::min(end_col, static_cast<int>(line_str.size()));
+
+            float x1 = origin.x + gw + ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, line_str.c_str(), line_str.c_str() + s_col).x;
+            float x2 = origin.x + gw + ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, line_str.c_str(), line_str.c_str() + e_col).x;
             float y  = origin.y + line * lh;
             dl->AddRectFilled(ImVec2(x1, y), ImVec2(x2, y + lh), sel_color);
         }
@@ -414,7 +418,13 @@ void EditorView::RenderCursors(ImDrawList* dl, ImVec2 origin, float lh,
     ImU32 color = ImGui::ColorConvertFloat4ToU32(theme_->cursor_color);
 
     for (auto& cursor : cursors_.cursors) {
-        float x = origin.x + gw + cursor.position.column * cw;
+        float text_w = 0.0f;
+        if (cursor.position.column > 0 && cursor.position.line < buffer_->GetLineCount()) {
+            const std::string& line = buffer_->GetLine(cursor.position.line);
+            int col = std::min(cursor.position.column, static_cast<int>(line.size()));
+            text_w = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, line.c_str(), line.c_str() + col).x;
+        }
+        float x = origin.x + gw + text_w;
         float y = origin.y + cursor.position.line * lh;
         dl->AddRectFilled(ImVec2(x, y), ImVec2(x + 2.0f, y + lh), color);
     }
@@ -1043,18 +1053,8 @@ void EditorView::HandleTextInput() {
         if (ch == '\t' || ch == '\r' || ch == '\n') continue;
         if (ch < 32 && ch != '\t') continue;
 
-        char buf[5] = {};
-        // Convert ImWchar (UTF-16) to UTF-8.
-        if (ch < 0x80) {
-            buf[0] = static_cast<char>(ch);
-        } else if (ch < 0x800) {
-            buf[0] = static_cast<char>(0xC0 | (ch >> 6));
-            buf[1] = static_cast<char>(0x80 | (ch & 0x3F));
-        } else {
-            buf[0] = static_cast<char>(0xE0 | (ch >> 12));
-            buf[1] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
-            buf[2] = static_cast<char>(0x80 | (ch & 0x3F));
-        }
+        char buf[8] = {};
+        ImTextCharToUtf8(buf, ch);
         InsertCharAtCursors(buf);
         
         // Auto-close brackets and quotes
@@ -1110,7 +1110,13 @@ void EditorView::MoveCursorLeft(bool ext) {
         if (!ext && c.HasSelection()) {
             c.MoveTo(c.SelectionBegin());
         } else if (c.position.column > 0) {
-            c.MoveTo({c.position.line, c.position.column - 1}, ext);
+            const std::string& line = buffer_->GetLine(c.position.line);
+            int step = 1;
+            while (c.position.column - step > 0 &&
+                   (static_cast<unsigned char>(line[c.position.column - step]) & 0xC0) == 0x80) {
+                step++;
+            }
+            c.MoveTo({c.position.line, c.position.column - step}, ext);
         } else if (c.position.line > 0) {
             int end = static_cast<int>(buffer_->GetLine(c.position.line - 1).size());
             c.MoveTo({c.position.line - 1, end}, ext);
@@ -1125,7 +1131,13 @@ void EditorView::MoveCursorRight(bool ext) {
         if (!ext && c.HasSelection()) {
             c.MoveTo(c.SelectionEnd());
         } else if (c.position.column < line_len) {
-            c.MoveTo({c.position.line, c.position.column + 1}, ext);
+            const std::string& line = buffer_->GetLine(c.position.line);
+            int step = 1;
+            while (c.position.column + step < line_len &&
+                   (static_cast<unsigned char>(line[c.position.column + step]) & 0xC0) == 0x80) {
+                step++;
+            }
+            c.MoveTo({c.position.line, c.position.column + step}, ext);
         } else if (c.position.line < buffer_->GetLineCount() - 1) {
             c.MoveTo({c.position.line + 1, 0}, ext);
         }
@@ -1270,8 +1282,14 @@ void EditorView::DeleteAtCursors(bool forward) {
         if (forward) {
             int line_len = static_cast<int>(buffer_->GetLine(c.position.line).size());
             if (c.position.column < line_len) {
+                const std::string& line = buffer_->GetLine(c.position.line);
+                int del_count = 1;
+                while (c.position.column + del_count < line_len &&
+                       (static_cast<unsigned char>(line[c.position.column + del_count]) & 0xC0) == 0x80) {
+                    del_count++;
+                }
                 buffer_->DeleteRange(c.position.line, c.position.column,
-                                     c.position.line, c.position.column + 1);
+                                     c.position.line, c.position.column + del_count);
             } else if (c.position.line < buffer_->GetLineCount() - 1) {
                 buffer_->DeleteRange(c.position.line, c.position.column,
                                      c.position.line + 1, 0);
@@ -1279,9 +1297,15 @@ void EditorView::DeleteAtCursors(bool forward) {
         } else {
             // Backspace.
             if (c.position.column > 0) {
-                buffer_->DeleteRange(c.position.line, c.position.column - 1,
+                const std::string& line = buffer_->GetLine(c.position.line);
+                int del_count = 1;
+                while (c.position.column - del_count > 0 &&
+                       (static_cast<unsigned char>(line[c.position.column - del_count]) & 0xC0) == 0x80) {
+                    del_count++;
+                }
+                buffer_->DeleteRange(c.position.line, c.position.column - del_count,
                                      c.position.line, c.position.column);
-                c.position.column--;
+                c.position.column -= del_count;
                 c.ClearSelection();
             } else if (c.position.line > 0) {
                 int prev_len = static_cast<int>(buffer_->GetLine(c.position.line - 1).size());

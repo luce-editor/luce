@@ -12,6 +12,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "misc/freetype/imgui_freetype.h"
 
 #include <SDL.h>
 #include <cstdio>
@@ -158,6 +159,49 @@ int main(int argc, char* argv[]) {
         0
     };
 
+    // Locate system or bundled emoji font
+    std::string emoji_font_path;
+#ifdef _WIN32
+    std::string win_dir = getenv("WINDIR") ? getenv("WINDIR") : (getenv("SystemRoot") ? getenv("SystemRoot") : "C:/Windows");
+    std::vector<std::string> emoji_candidates = {
+        win_dir + "/Fonts/seguiemj.ttf", // Segoe UI Emoji (full color)
+        win_dir + "/Fonts/seguisym.ttf", // Segoe UI Symbol
+        exe_dir + "/assets/fonts/seguiemj.ttf",
+        "assets/fonts/seguiemj.ttf"
+    };
+#else
+    std::vector<std::string> emoji_candidates = {
+        "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+        "/usr/share/fonts/noto/NotoColorEmoji.ttf",
+        "/usr/share/fonts/google-noto-color-emoji/NotoColorEmoji.ttf",
+        "/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf",
+        exe_dir + "/assets/fonts/NotoColorEmoji.ttf",
+        "assets/fonts/NotoColorEmoji.ttf"
+    };
+#endif
+    for (const auto& candidate : emoji_candidates) {
+        if (fs::exists(candidate)) {
+            emoji_font_path = candidate;
+            printf("Found Emoji Font: %s\n", candidate.c_str());
+            break;
+        }
+    }
+
+    // Emoji glyph ranges covering Dingbats, Miscellaneous Symbols, and SMP Emoji planes
+    static const ImWchar emoji_glyph_ranges[] = {
+        0x2000, 0x27BF,   // Punctuation, Currency, Arrows, Tech (⌨️), Shapes, Symbols (⚡), Dingbats (✨)
+        0x2B00, 0x2BFF,   // Misc Symbols and Arrows
+        0x2900, 0x297F,   // Supplemental Arrows-B
+        0x1F000, 0x1FFFF, // SMP: Emoticons, Pictographs (🎉, 🎨, 📝, 🌿, 🔍, 💻, 🧩, 📦, 📚, 🌐, 🔌), Transport, Symbols
+        0
+    };
+
+    ImFontConfig emoji_cfg;
+    emoji_cfg.MergeMode = true;
+    emoji_cfg.OversampleH = 1;
+    emoji_cfg.OversampleV = 1;
+    emoji_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
+
     // Load UI font first so it becomes ImGui's default font
     if (!ibm_dir.empty()) {
         std::string regular_path  = ibm_dir + "/IBMPlexSans-Regular.ttf";
@@ -166,18 +210,34 @@ int main(int argc, char* argv[]) {
         std::string semibold_path = ibm_dir + "/IBMPlexSans-SemiBold.ttf";
 
         font_regular = io.Fonts->AddFontFromFileTTF(regular_path.c_str(), base_font_size, nullptr, glyph_ranges);
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        }
+
         font_bold    = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size, nullptr, glyph_ranges);
         font_italic  = io.Fonts->AddFontFromFileTTF(italic_path.c_str(), base_font_size, nullptr, glyph_ranges);
+
         font_h1      = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size * 1.6f, nullptr, glyph_ranges);
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size * 1.6f, &emoji_cfg, emoji_glyph_ranges);
+        }
+
         font_h2      = io.Fonts->AddFontFromFileTTF(semibold_path.c_str(), base_font_size * 1.3f, nullptr, glyph_ranges);
-        printf("Loaded UI Font: IBM Plex Sans\n");
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size * 1.3f, &emoji_cfg, emoji_glyph_ranges);
+        }
+
+        printf("Loaded UI Font: IBM Plex Sans with Emoji support\n");
     }
 
     // Load Lilex for editor and terminal
     if (!lilex_dir.empty()) {
         std::string lilex_path = lilex_dir + "/Lilex-Regular.ttf";
         font_editor_mono = io.Fonts->AddFontFromFileTTF(lilex_path.c_str(), base_font_size, nullptr, glyph_ranges);
-        printf("Loaded Editor Font: Lilex Monospace (%s)\n", lilex_path.c_str());
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        }
+        printf("Loaded Editor Font: Lilex Monospace (%s) with Emoji support\n", lilex_path.c_str());
     } else if (font_regular) {
         font_editor_mono = font_regular;
     }

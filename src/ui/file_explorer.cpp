@@ -28,33 +28,100 @@ void FileExplorer::SetRoot(const std::string& path) {
 
 void FileExplorer::Render() {
     if (root_.empty()) {
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float pad = 12.0f;
+        float content_w = (avail_w - pad * 2.0f > 120.0f) ? (avail_w - pad * 2.0f) : 120.0f;
+
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.85f, 1.0f), "> No Folder Opened");
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.60f, 1.0f));
+        ImGui::TextUnformatted("NO FOLDER OPENED");
+        ImGui::PopStyleColor();
+
         ImGui::Spacing();
-        ImGui::TextWrapped("You have not yet added a folder to the workspace.");
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::Separator();
         ImGui::Spacing();
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.45f, 0.75f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.10f, 0.55f, 0.85f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.03f, 0.35f, 0.65f, 1.0f));
-        
-        if (ImGui::Button("Open Folder", ImVec2(-1, 30))) {
+        // Icon + Title
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImTextureID folder_icon = IconManager::Instance().GetFolderIcon(false);
+        if (folder_icon) {
+            ImGui::Image(folder_icon, ImVec2(22.0f, 22.0f));
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.92f, 0.94f, 1.0f));
+        ImGui::TextUnformatted("Workspace");
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.62f, 0.64f, 0.68f, 1.0f));
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_w);
+        ImGui::TextWrapped("You have not opened a workspace folder yet. Open a local directory to browse files and track Git changes.");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Button styles: rounded corners & padding
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+
+        // Primary Button: Open Folder
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.44f, 0.72f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.52f, 0.82f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.36f, 0.62f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+        if (ImGui::Button("Open Folder", ImVec2(content_w, 32.0f))) {
             if (on_open_folder_) on_open_folder_();
         }
-        
-        ImGui::Spacing();
-        ImGui::TextWrapped("You can clone a repository locally.");
+        ImGui::PopStyleColor(4);
+
         ImGui::Spacing();
 
-        if (ImGui::Button("Clone Repository", ImVec2(-1, 30))) {
-            // Placeholder for clone
+        // Secondary Button: Clone Repository
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.17f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.24f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.30f, 0.35f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.88f, 0.90f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+        if (ImGui::Button("Clone Repository...", ImVec2(content_w, 32.0f))) {
+            if (on_clone_repository_) on_clone_repository_();
         }
+        ImGui::PopStyleVar(); // FrameBorderSize
+        ImGui::PopStyleColor(5);
 
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(2); // FrameRounding, FramePadding
 
         ImGui::Spacing();
-        ImGui::TextDisabled("To learn more about how to use Git and");
-        ImGui::TextDisabled("source control in Luce read our docs.");
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Documentation Link
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.50f, 0.54f, 1.0f));
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_w);
+        ImGui::TextWrapped("Learn more about Luce shortcuts & features:");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.65f, 0.95f, 1.0f));
+        if (ImGui::SmallButton("Documentation Website ->")) {
+            platform::OpenURL("https://luce-editor.github.io/luce/");
+        }
+        ImGui::PopStyleColor();
+
         return;
     }
 

@@ -181,6 +181,18 @@ void OpenInFileExplorer(const std::string& path) {
 #endif
 }
 
+void OpenURL(const std::string& url) {
+#ifdef _WIN32
+    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif __APPLE__
+    std::string cmd = "open \"" + url + "\"";
+    system(cmd.c_str());
+#else
+    std::string cmd = "xdg-open \"" + url + "\"";
+    system(cmd.c_str());
+#endif
+}
+
 // ── Dynamic library loading ───────────────────────────────────────────────
 
 #ifdef _WIN32
