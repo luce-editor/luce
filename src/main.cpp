@@ -215,7 +215,14 @@ int main(int argc, char* argv[]) {
         }
 
         font_bold    = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size, nullptr, glyph_ranges);
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        }
+
         font_italic  = io.Fonts->AddFontFromFileTTF(italic_path.c_str(), base_font_size, nullptr, glyph_ranges);
+        if (!emoji_font_path.empty()) {
+            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        }
 
         font_h1      = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size * 1.6f, nullptr, glyph_ranges);
         if (!emoji_font_path.empty()) {

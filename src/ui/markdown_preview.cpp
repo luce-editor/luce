@@ -10,33 +10,6 @@
 
 namespace luce {
 
-// Strip 4-byte UTF-8 sequences (most emojis) and 0xE2... sequences (Dingbats/Symbols like ✨, ✅)
-static std::string RemoveEmojis(const std::string& s) {
-    std::string out;
-    out.reserve(s.size());
-    for (size_t i = 0; i < s.size(); ) {
-        unsigned char c = s[i];
-        if (c < 0x80) { // ASCII
-            out += c;
-            i += 1;
-        } else if ((c & 0xE0) == 0xC0) { // 2 bytes (e.g. Polish characters)
-            if (i + 1 < s.size()) out += s.substr(i, 2);
-            i += 2;
-        } else if ((c & 0xF0) == 0xE0) { // 3 bytes
-            // 0xE2 covers U+2000 to U+2FFF (Symbols, Dingbats). We drop them.
-            if (c != 0xE2) {
-                if (i + 2 < s.size()) out += s.substr(i, 3);
-            }
-            i += 3;
-        } else if ((c & 0xF8) == 0xF0) { // 4 bytes (SMP emojis like 🚀)
-            i += 4;
-        } else {
-            i += 1; // skip invalid
-        }
-    }
-    return out;
-}
-
 MarkdownPreview::MarkdownPreview() = default;
 
 void MarkdownPreview::Render(const char* id, const TextBuffer* buffer, const Theme& theme,
@@ -253,7 +226,7 @@ void MarkdownPreview::Render(const char* id, const TextBuffer* buffer, const The
     };
 
     for (int i = 0; i < buffer->GetLineCount(); ++i) {
-        std::string line = RemoveEmojis(buffer->GetLine(i));
+        std::string line = buffer->GetLine(i);
         while (!line.empty() && (line.back() == ' ' || line.back() == '\r')) line.pop_back();
 
         // Detect ``` fences
