@@ -21,7 +21,8 @@ Interfejs Luce bazuje na silniku **Dear ImGui (gałąź docking)** wzbogaconym o
    - **Problems (Problemy)**: Centralna lista wykrytych błędów i ostrzeżeń w projekcie z opcją kopiowania.
    - **Output (Wyjście)**: Dedykowana konsola wyjściowa procesów i narzędzi.
    - **Terminal**: Wbudowane taby terminala z emulacją VT100 i wsparciem dla PowerShell/Bash.
-6. **Pasek Stanu**: Informacje o gałęzi Git, języku, pozycji kursora (Ln, Col), kodowaniu, wcięciach i wersji edytora.
+6. **Pasek Stanu**: Dynamicznie stylizowany przez aktywny motyw pasek z informacjami o gałęzi Git, języku, pozycji kursora (Ln, Col), kodowaniu, wcięciach i wersji edytora.
+7. **Ustawienia i Preferencje**: Niezależne natywne okno systemowe ustawień (`Ctrl+,`) w stylu edytora Zed z animowanymi przełącznikami toggle switch, galerią motywów oraz bezpośrednią edycją `settings.json` (`Ctrl+Shift+,`) z przeładowywaniem w czasie rzeczywistym.
 
 ---
 

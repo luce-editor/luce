@@ -223,12 +223,14 @@ void EditorView::RenderGutter(ImDrawList* dl, ImVec2 origin, float lh,
     float strip_w = 3.0f;
 
     for (int i = first; i < last; ++i) {
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%d", i + 1);
-        float text_width = ImGui::CalcTextSize(buf).x;
-        float x = origin.x + scroll_x + gw - text_width - 12.0f;
         float y = origin.y + i * lh;
-        dl->AddText(ImVec2(x, y), (i == cursor_line) ? active_fg : fg, buf);
+        if (show_line_numbers) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%d", i + 1);
+            float text_width = ImGui::CalcTextSize(buf).x;
+            float x = origin.x + scroll_x + gw - text_width - 12.0f;
+            dl->AddText(ImVec2(x, y), (i == cursor_line) ? active_fg : fg, buf);
+        }
 
         // Git Gutter diff marker (Added, Modified, Deleted)
         auto it = git_diff_marks_.lines.find(i);
@@ -408,9 +410,11 @@ void EditorView::RenderSelections(ImDrawList* dl, ImVec2 origin, float lh,
 
 void EditorView::RenderCursors(ImDrawList* dl, ImVec2 origin, float lh,
                                 float cw, float gw) {
-    // Blink every 0.53 seconds (like VS Code).
-    cursor_blink_time_ += ImGui::GetIO().DeltaTime;
-    bool visible = fmod(cursor_blink_time_, 1.06) < 0.53;
+    bool visible = true;
+    if (cursor_blinking) {
+        cursor_blink_time_ += ImGui::GetIO().DeltaTime;
+        visible = fmod(cursor_blink_time_, 1.06) < 0.53;
+    }
     if (!focused_) visible = false;
 
     if (!visible) return;
@@ -434,6 +438,7 @@ void EditorView::RenderCursors(ImDrawList* dl, ImVec2 origin, float lh,
 
 void EditorView::RenderActiveLineHighlight(ImDrawList* dl, ImVec2 origin,
                                             float lh, float gw, float ww) {
+    if (!highlight_current_line) return;
     ImU32 color = ImGui::ColorConvertFloat4ToU32(theme_->active_line);
     for (auto& cursor : cursors_.cursors) {
         float y = origin.y + cursor.position.line * lh;
@@ -889,6 +894,18 @@ void EditorView::HandleKeyboardInput() {
     bool shift  = io.KeyShift;
     bool alt    = io.KeyAlt;
 
+    // Reset cursor blinking timer whenever any key is pressed or character is queued
+    if (io.InputQueueCharacters.Size > 0) {
+        cursor_blink_time_ = 0.0;
+    } else {
+        for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+            if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(k))) {
+                cursor_blink_time_ = 0.0;
+                break;
+            }
+        }
+    }
+
     // Autocomplete navigation
     if (ac_open_) {
         if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
@@ -941,6 +958,28 @@ void EditorView::HandleKeyboardInput() {
                 InsertNewLine();
             }
         } else {
+            // If cursor is on a freshly expanded Lua function declaration line, Enter jumps cleanly into the body
+            if (IsLuaFile() && cursors_.cursors.size() == 1) {
+                auto& c = cursors_.Primary();
+                int line = c.position.line;
+                if (line + 2 < buffer_->GetLineCount()) {
+                    const auto& cur_l  = buffer_->GetLine(line);
+                    const auto& body_l = buffer_->GetLine(line + 1);
+                    const auto& end_l  = buffer_->GetLine(line + 2);
+                    
+                    size_t fn_pos = cur_l.find("function ");
+                    if (fn_pos != std::string::npos && cur_l.ends_with(")")) {
+                        std::string trimmed_end = end_l;
+                        size_t first = trimmed_end.find_first_not_of(" \t");
+                        if (first != std::string::npos) trimmed_end = trimmed_end.substr(first);
+                        if (trimmed_end == "end" && body_l.find_first_not_of(" \t") == std::string::npos) {
+                            c.MoveTo({line + 1, static_cast<int>(body_l.size())});
+                            needs_scroll_to_cursor_ = true;
+                            return;
+                        }
+                    }
+                }
+            }
             InsertNewLine();
         }
     }
@@ -972,15 +1011,21 @@ void EditorView::HandleKeyboardInput() {
 
     // Toggle comment (Ctrl+/)
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Slash)) ToggleComment();
-
-    // Reset blink on any input.
-    cursor_blink_time_ = 0.0;
 }
 
 // ── Mouse input ───────────────────────────────────────────────────────────
 
 void EditorView::HandleMouseInput(ImVec2 origin, float lh, float cw, float gw) {
     ImGuiIO& io = ImGui::GetIO();
+
+    // Ctrl + Mouse Wheel for font zoom
+    if (io.KeyCtrl && std::abs(io.MouseWheel) > 0.01f && zoom_with_mouse_wheel) {
+        if (on_font_zoom_) {
+            on_font_zoom_(io.MouseWheel > 0.0f ? 1 : -1);
+        }
+        return;
+    }
+
     float scroll_x = ImGui::GetScrollX();
     float scroll_y = ImGui::GetScrollY();
     ImVec2 win_pos = ImGui::GetWindowPos();
@@ -1055,6 +1100,37 @@ void EditorView::HandleTextInput() {
 
         char buf[8] = {};
         ImTextCharToUtf8(buf, ch);
+
+        // Lua function snippet expansion on typing space:
+        if (ch == ' ' && IsLuaFile() && cursors_.cursors.size() == 1 && !cursors_.Primary().HasSelection()) {
+            const auto& c = cursors_.Primary();
+            int cur_line = c.position.line;
+            int col = c.position.column;
+            const auto& line = buffer_->GetLine(cur_line);
+            if (col >= 8 && line.substr(col - 8, 8) == "function") {
+                bool at_boundary = (col == 8 || (!std::isalnum(static_cast<unsigned char>(line[col - 9])) && line[col - 9] != '_'));
+                if (at_boundary) {
+                    std::string before = line.substr(0, col - 8);
+                    if (before.find("--") == std::string::npos) {
+                        int quotes = 0;
+                        for (char qch : before) { if (qch == '"' || qch == '\'') quotes++; }
+                        if (quotes % 2 == 0) {
+                            std::string after = (col < static_cast<int>(line.size())) ? line.substr(col) : "";
+                            if (after.find_first_not_of(" \t") == std::string::npos) {
+                                size_t first = before.find_first_not_of(" \t");
+                                std::string trimmed_before = (first != std::string::npos) ? before.substr(first) : "";
+                                if (trimmed_before.empty() || trimmed_before == "local ") {
+                                    if (ExpandLuaFunctionSnippet(cur_line, col - 8, col)) {
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         InsertCharAtCursors(buf);
         
         // Auto-close brackets and quotes
@@ -1445,23 +1521,45 @@ void EditorView::InsertNewLine() {
 
 /// Insert a tab (spaces or actual tab character) or outdent on Shift+Tab, with Emmet abbreviation expansion.
 void EditorView::HandleTab(bool shift) {
-    if (!shift && cursors_.cursors.size() == 1 && !cursors_.Primary().HasSelection()) {
+    if (!shift && cursors_.cursors.size() == 1) {
         auto& c = cursors_.Primary();
-        const auto& line = buffer_->GetLine(c.position.line);
-        int col = c.position.column;
 
-        // Extract abbreviation before cursor
-        int start = col;
-        while (start > 0 && (std::isalnum(static_cast<unsigned char>(line[start - 1])) ||
-                             line[start - 1] == '!' || line[start - 1] == '.' ||
-                             line[start - 1] == '#' || line[start - 1] == '>' ||
-                             line[start - 1] == '+' || line[start - 1] == ':')) {
-            --start;
+        // If placeholder 'func' was selected after snippet expansion, Tab jumps cleanly to the function body!
+        if (c.HasSelection() && IsLuaFile()) {
+            int line = c.position.line;
+            const auto& line_str = buffer_->GetLine(line);
+            if (line_str.find("function ") != std::string::npos && line + 1 < buffer_->GetLineCount()) {
+                const auto& next_line = buffer_->GetLine(line + 1);
+                c.MoveTo({line + 1, static_cast<int>(next_line.size())});
+                needs_scroll_to_cursor_ = true;
+                return;
+            }
         }
 
-        if (start < col) {
-            std::string abbr = line.substr(start, col - start);
-            std::string expansion;
+        if (!c.HasSelection()) {
+            const auto& line = buffer_->GetLine(c.position.line);
+            int col = c.position.column;
+
+            // Extract abbreviation before cursor
+            int start = col;
+            while (start > 0 && (std::isalnum(static_cast<unsigned char>(line[start - 1])) ||
+                                 line[start - 1] == '!' || line[start - 1] == '.' ||
+                                 line[start - 1] == '#' || line[start - 1] == '>' ||
+                                 line[start - 1] == '+' || line[start - 1] == ':')) {
+                --start;
+            }
+
+            if (start < col) {
+                std::string abbr = line.substr(start, col - start);
+
+                // Lua function snippet expansion on Tab:
+                if (IsLuaFile() && (abbr == "function" || abbr == "func")) {
+                    if (ExpandLuaFunctionSnippet(c.position.line, start, col)) {
+                        return;
+                    }
+                }
+
+                std::string expansion;
 
             if (abbr == "!" || abbr == "html:5") {
                 expansion = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Document</title>\n</head>\n<body>\n    \n</body>\n</html>";
@@ -1541,6 +1639,7 @@ void EditorView::HandleTab(bool shift) {
             }
         }
     }
+}
 
     std::string tab_str = use_spaces ? std::string(tab_size, ' ') : "\t";
 
@@ -1853,6 +1952,9 @@ void EditorView::EnsureCursorVisible() {
 // ── Utility ───────────────────────────────────────────────────────────────
 
 float EditorView::CalculateGutterWidth() const {
+    if (!show_line_numbers) {
+        return 14.0f;
+    }
     int digits = 1;
     int lines  = buffer_->GetLineCount();
     while (lines >= 10) { ++digits; lines /= 10; }
@@ -1950,7 +2052,16 @@ namespace {
 struct AcSymbol { std::string name; std::string kind; };
 
 bool IsDeclarationLine(const std::string& line, const std::string& word, AcSymbol& out) {
-    // Detect function-like declaration: "type name(" or "type& name("
+    // Detect function-like declaration: "type name(" or "type& name(" or "function name("
+    if (line.find("function " + word) != std::string::npos ||
+        line.find("local function " + word) != std::string::npos) {
+        out = {word, "fn"};
+        return true;
+    }
+    if (line.find("local " + word) != std::string::npos) {
+        out = {word, "var"};
+        return true;
+    }
     auto paren_pos = line.find(word + "(");
     if (paren_pos != std::string::npos) {
         out = {word, "fn"};
@@ -2197,7 +2308,46 @@ void EditorView::UpdateAutocomplete() {
             }
 
             std::vector<SymbolInfo> members;
-            if (symbol_index_ && !target_type.empty()) {
+            if (var_name == "luce") {
+                static const std::vector<std::pair<std::string, SymbolKind>> kLuceMembers = {
+                    {"plugin", SymbolKind::Variable},
+                    {"register_command", SymbolKind::Function},
+                    {"on", SymbolKind::Function},
+                    {"get_buffer_text", SymbolKind::Function},
+                    {"set_buffer_text", SymbolKind::Function},
+                    {"get_line_count", SymbolKind::Function},
+                    {"get_line", SymbolKind::Function},
+                    {"set_line", SymbolKind::Function},
+                    {"insert_line", SymbolKind::Function},
+                    {"delete_line", SymbolKind::Function},
+                    {"get_cursor", SymbolKind::Function},
+                    {"set_cursor", SymbolKind::Function},
+                    {"get_selection", SymbolKind::Function},
+                    {"set_selection", SymbolKind::Function},
+                    {"insert_at_cursor", SymbolKind::Function},
+                    {"get_active_file", SymbolKind::Function},
+                    {"open_file", SymbolKind::Function},
+                    {"save_active", SymbolKind::Function},
+                    {"get_workspace_path", SymbolKind::Function},
+                    {"execute_command", SymbolKind::Function},
+                    {"add_diagnostic", SymbolKind::Function},
+                    {"clear_diagnostics", SymbolKind::Function},
+                    {"register_completion_provider", SymbolKind::Function},
+                    {"set_status", SymbolKind::Function},
+                    {"show_notification", SymbolKind::Function},
+                    {"show_error", SymbolKind::Function},
+                    {"show_warning", SymbolKind::Function},
+                    {"show_info", SymbolKind::Function},
+                    {"log", SymbolKind::Function},
+                    {"warn", SymbolKind::Function}
+                };
+                for (const auto& [name, kind] : kLuceMembers) {
+                    SymbolInfo s;
+                    s.name = name;
+                    s.kind = kind;
+                    members.push_back(s);
+                }
+            } else if (symbol_index_ && !target_type.empty()) {
                 members = symbol_index_->GetMembersOf(target_type);
             }
 
@@ -2360,8 +2510,26 @@ void EditorView::UpdateAutocomplete() {
         "int", "float", "bool", "list", "dict", "set", "tuple", "bytes", "bytearray",
         "print", "len", "range", "enumerate", "zip", "map", "filter", "open", "input",
         "super", "self", "cls", "isinstance", "issubclass", "hasattr", "getattr", "setattr",
-        "None", "True", "False", "Exception", "ValueError", "TypeError", "KeyError", "IndexError",
-        "append", "extend", "insert", "pop", "remove", "clear", "count", "index", "keys", "values", "items", "get", "update"
+        "append", "extend", "insert", "pop", "remove", "clear", "count", "index", "keys", "values", "items", "get", "update",
+        // Lua language keywords & builtins
+        "elseif", "local", "nil", "repeat", "until",
+        "tostring", "tonumber", "pairs", "ipairs", "pcall", "xpcall", "error", "assert", "require",
+        "setmetatable", "getmetatable", "rawget", "rawset", "rawequal", "rawlen",
+        // Luce Lua plugin API
+        "luce", "luce.plugin", "luce.on", "luce.register_command", "luce.get_buffer_text",
+        "luce.set_buffer_text", "luce.get_line_count", "luce.get_line", "luce.set_line",
+        "luce.insert_line", "luce.delete_line", "luce.get_cursor", "luce.set_cursor",
+        "luce.get_selection", "luce.set_selection", "luce.insert_at_cursor", "luce.get_active_file",
+        "luce.open_file", "luce.save_active", "luce.get_workspace_path", "luce.execute_command",
+        "luce.add_diagnostic", "luce.clear_diagnostics", "luce.register_completion_provider",
+        "luce.set_status", "luce.show_notification", "luce.show_error", "luce.show_warning",
+        "luce.show_info", "luce.log", "luce.warn",
+        "register_command", "get_buffer_text", "set_buffer_text", "get_line_count", "get_line",
+        "set_line", "insert_line", "delete_line", "get_cursor", "set_cursor", "get_selection",
+        "set_selection", "insert_at_cursor", "get_active_file", "open_file", "save_active",
+        "get_workspace_path", "execute_command", "add_diagnostic", "clear_diagnostics",
+        "register_completion_provider", "set_status", "show_notification", "show_error",
+        "show_warning", "show_info"
     };
 
     std::vector<std::string> kw_matches;
@@ -2424,6 +2592,10 @@ void EditorView::UpdateAutocomplete() {
         std::ranges::sort(plugin_matches);
     }
 
+    if (IsLuaFile() && std::string("function").starts_with(lower_prefix)) {
+        push_unique("function");
+    }
+
     for (const auto& s : fn_symbols)      push_unique(s);
     for (const auto& s : var_symbols)     push_unique(s);
     for (const auto& s : plugin_matches)  push_unique(s);
@@ -2442,6 +2614,55 @@ void EditorView::UpdateAutocomplete() {
     ac_open_ = true;
 }
 
+bool EditorView::IsLuaFile() const {
+    if (highlighter_ && std::string_view(highlighter_->GetLanguageName()) == "Lua") {
+        return true;
+    }
+    if (current_file_path_.empty()) return false;
+    size_t dot = current_file_path_.find_last_of('.');
+    if (dot == std::string::npos) return false;
+    std::string ext = current_file_path_.substr(dot);
+    std::ranges::transform(ext, ext.begin(), ::tolower);
+    return (ext == ".lua");
+}
+
+bool EditorView::ExpandLuaFunctionSnippet(int cur_line, int start, int col) {
+    if (!buffer_ || cur_line < 0 || cur_line >= buffer_->GetLineCount()) return false;
+    const auto& line_text = buffer_->GetLine(cur_line);
+    if (start < 0 || col > static_cast<int>(line_text.size()) || start > col) return false;
+
+    // Detect indentation of current line up to `start`
+    std::string indent;
+    for (int i = 0; i < start && i < static_cast<int>(line_text.size()); ++i) {
+        if (line_text[i] == ' ' || line_text[i] == '\t') {
+            indent += line_text[i];
+        } else {
+            break;
+        }
+    }
+
+    std::string indent_step = use_spaces ? std::string(tab_size, ' ') : "\t";
+    std::string body_indent = indent + indent_step;
+    std::string expansion = "function func()\n" + body_indent + "\n" + indent + "end";
+
+    buffer_->BeginUndoGroup();
+    buffer_->DeleteRange(cur_line, start, cur_line, col);
+    buffer_->InsertText(cur_line, start, expansion);
+
+    // Select "func" without parentheses:
+    // Inserted line has: "function func()"
+    // start + 9 is the start of "func"
+    // start + 13 is the end of "func"
+    auto& c = cursors_.Primary();
+    c.selection_start = {cur_line, start + 9};
+    c.position        = {cur_line, start + 13};
+    buffer_->EndUndoGroup();
+
+    ac_open_ = false;
+    needs_scroll_to_cursor_ = true;
+    return true;
+}
+
 void EditorView::ApplyAutocomplete() {
     if (!ac_open_ || ac_suggestions_.empty() || ac_selected_ < 0 || ac_selected_ >= static_cast<int>(ac_suggestions_.size())) {
         ac_open_ = false;
@@ -2449,6 +2670,17 @@ void EditorView::ApplyAutocomplete() {
     }
 
     const std::string& chosen = ac_suggestions_[ac_selected_];
+
+    // Lua function snippet
+    if (IsLuaFile() && (chosen == "function" || chosen == "func")) {
+        const auto& c = cursors_.Primary();
+        int cur_line = c.position.line;
+        int col = c.position.column;
+        int start = col - static_cast<int>(ac_prefix_.size());
+        if (start >= 0 && ExpandLuaFunctionSnippet(cur_line, start, col)) {
+            return;
+        }
+    }
     
     // Check if it's an Emmet snippet
     std::string expansion;
@@ -2577,6 +2809,9 @@ void EditorView::RenderAutocomplete(ImVec2 origin, float line_height, float char
             if (ac_include_mode_) {
                 icon       = " H";
                 icon_color = ImVec4(0.4f, 0.8f, 0.9f, 1.0f);
+            } else if (IsLuaFile() && (sug == "function" || sug == "func")) {
+                icon       = " s";
+                icon_color = ImVec4(0.95f, 0.6f, 0.2f, 1.0f);
             } else {
                 bool is_method = (sug.size() >= 2 && sug.ends_with("()"));
                 bool looks_like_fn = is_method || (sug.find('_') != std::string::npos &&

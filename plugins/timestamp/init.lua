@@ -1,8 +1,5 @@
 -- ============================================================================
--- timestamp.lua - Insert current ISO 8601 timestamp at cursor
---
--- Install: drop this file into the plugins/ folder next to luce.exe.
--- Use:     Ctrl+Shift+P -> "Timestamp: Insert at Cursor"
+-- timestamp / init.lua - Insert current ISO 8601 timestamp at cursor
 -- ============================================================================
 
 luce.plugin = {
@@ -10,7 +7,6 @@ luce.plugin = {
     version     = "1.0.0",
     author      = "Luce Team",
     description = "Inserts the current UTC date/time as a code comment.",
-    icon        = "🕒",
 }
 
 local function insert_timestamp()

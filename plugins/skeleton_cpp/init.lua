@@ -1,16 +1,12 @@
 -- ============================================================================
---  skeletonCpp.lua -> insert basic c++ skeleton at cursor
---
---  Install: drop this file into plugins/ folder next to luce.exe
---  Use: Ctrl+Shift+P -> Skeleton: Insert basic Skeleton
+--  skeleton_cpp / init.lua -> insert basic C++ skeleton at cursor
 -- ============================================================================
 
 luce.plugin = {
     name = "Skeleton",
     version = "1.0.0",
     author = "Luce Team",
-    description = "Inserts basic C++ skeleton",
-    icon = "💀",
+    description = "Inserts basic C++ skeleton and class boilerplate",
 }
 
 local function insert_skel()

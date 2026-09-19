@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/luce-editor/luce/releases"><img src="https://img.shields.io/badge/Release-v0.1.0-blue" alt="Release" /></a>
+  <a href="https://github.com/luce-editor/luce/releases"><img src="https://img.shields.io/badge/Release-v0.1.5-blue" alt="Release" /></a>
   <img src="https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B" alt="C++23" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey" alt="Platform" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-green" alt="License" /></a>

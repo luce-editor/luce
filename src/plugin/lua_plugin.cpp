@@ -617,7 +617,8 @@ void LuaPlugin::RegisterLuceAPI(App* app) {
 }
 
 bool LuaPlugin::Load(const std::string& path, App* app) {
-    path_ = path;
+    path_ = fs::path(path).generic_string();
+    info_.script_path = path_;
 
     L_ = luaL_newstate();
     if (!L_) return false;
@@ -680,6 +681,20 @@ bool LuaPlugin::Load(const std::string& path, App* app) {
             } else if (fs::exists(dir / (stem.string() + ".png"))) {
                 info_.icon = (dir / (stem.string() + ".png")).string();
             }
+        }
+    }
+
+    // Detect README.md in the plugin folder
+    {
+        fs::path p(path);
+        fs::path dir = p.parent_path();
+        info_.folder_path = dir.generic_string();
+        if (fs::exists(dir / "README.md")) {
+            info_.readme_path = (dir / "README.md").generic_string();
+        } else if (fs::exists(dir / "readme.md")) {
+            info_.readme_path = (dir / "readme.md").generic_string();
+        } else if (fs::exists(dir / (p.stem().string() + ".md"))) {
+            info_.readme_path = (dir / (p.stem().string() + ".md")).generic_string();
         }
     }
 

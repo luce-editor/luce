@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Luce VERSION 0.1.0 LANGUAGES C CXX)
+project(Luce VERSION 0.1.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -173,7 +173,7 @@ target_compile_definitions(luce PRIVATE
 
 # Windows: link shell32 for file dialogs, suppress console in Release
 if(WIN32)
-    target_link_libraries(luce PRIVATE shell32 comdlg32 ole32 uuid dwmapi)
+    target_link_libraries(luce PRIVATE shell32 comdlg32 ole32 uuid dwmapi psapi)
     set_target_properties(luce PROPERTIES
         WIN32_EXECUTABLE $<CONFIG:Release>
     )
@@ -193,5 +193,9 @@ add_custom_command(TARGET luce POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/plugins"
             "$<TARGET_FILE_DIR:luce>/plugins"
-    COMMENT "Copying assets, themes, and plugins to output directory"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:luce>/icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/icons"
+            "$<TARGET_FILE_DIR:luce>/icons"
+    COMMENT "Copying assets, themes, plugins, and icons to output directory"
 )

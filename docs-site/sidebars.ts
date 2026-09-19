@@ -45,6 +45,8 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'interface/overview',
+        'interface/welcome',
+        'interface/settings',
         'interface/activity-bar',
         'interface/source-control',
         'interface/diagnostics',

@@ -33,10 +33,22 @@ void PluginManager::Init(const std::string& plugins_dir) {
         if (entry.is_regular_file() && entry.path().extension() == ".lua") {
             LoadPlugin(entry.path().string());
         } else if (entry.is_directory()) {
-            // Check for plugin package: plugins/<name>/init.lua
+            // Check for plugin package: plugins/<name>/init.lua or <name>.lua
             auto init_file = entry.path() / "init.lua";
             if (fs::exists(init_file)) {
                 LoadPlugin(init_file.string());
+            } else {
+                auto named_file = entry.path() / (entry.path().filename().string() + ".lua");
+                if (fs::exists(named_file)) {
+                    LoadPlugin(named_file.string());
+                } else {
+                    for (const auto& sub : fs::directory_iterator(entry.path(), ec)) {
+                        if (sub.is_regular_file() && sub.path().extension() == ".lua") {
+                            LoadPlugin(sub.path().string());
+                            break;
+                        }
+                    }
+                }
             }
         }
     }

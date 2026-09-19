@@ -22,7 +22,12 @@ Luce includes built-in lexers for:
   - Multi-line docstrings with triple quotes `"""` and `'''`, f-strings, decorators `@`, and comments `#`.
   - Automatic indentation (tab) when pressing `Enter` after a colon `:`.
 - **Rust** (`.rs`)
+- **JSON** (`.json`):
+  - Fast state machine recognizing keys/properties, string values, numeric literals, boolean/null keywords (`true`, `false`, `null`), punctuation, and comments (`//`, `/* */`).
+  - Bundled with the `json_intellisense` Lua extension for intelligent auto-completion of Luce `settings.json` keys, theme names, and JSON primitives.
 - **Web Technologies**: HTML, CSS, JavaScript (`.html`, `.htm`, `.css`, `.js`)
+- **Lua** (`.lua`):
+  - Hand-crafted lexer supporting Lua 5.1–5.4 keywords (`local`, `function`, `then`, `end`, etc.), long brackets/multi-line strings (`[[ ... ]]`), block comments (`--[[ ... ]]`), and operators.
 - **CMake** (`CMakeLists.txt`, `.cmake`)
 - **Markdown** (`.md`) with real-time preview (`Ctrl+Shift+M`)
 

@@ -10,11 +10,16 @@
 #include "ui/terminal_panel.h"
 #include "ui/theme.h"
 #include "ui/toast_manager.h"
+#include "ui/settings_manager.h"
+#include "ui/settings_view.h"
+#include "ui/welcome_view.h"
 #include "plugin/plugin_manager.h"
 #include "editor/symbol_index.h"
 
-#include <string>
+#include <atomic>
 #include <memory>
+#include <string>
+#include <thread>
 
 namespace luce {
 
@@ -43,6 +48,10 @@ public:
         font_italic_  = italic;
         font_h1_      = h1;
         font_h2_      = h2;
+        if (font_editor_) {
+            font_editor_->Scale = static_cast<float>(settings_manager_.Get().editor_font_size) / 15.0f;
+        }
+        SetUiFontSize(settings_manager_.Get().ui_font_size);
     }
 
     void ZoomIn()   { SetScale(ui_scale_ + 0.1f); }
@@ -68,6 +77,28 @@ public:
     bool IsMinimapEnabled() const { return show_minimap_; }
     void SetMinimapEnabled(bool enabled);
     void ToggleMinimap() { SetMinimapEnabled(!show_minimap_); }
+
+    SettingsManager& GetSettingsManager() { return settings_manager_; }
+    const SettingsManager& GetSettingsManager() const { return settings_manager_; }
+    SettingsView& GetSettingsView() { return settings_view_; }
+
+    void OpenSettingsFile();
+    void OpenIconsConfigFile();
+    void OpenSettingsTab();
+    void OpenSettingsWindow();
+    void CloseSettingsWindow();
+    bool IsSettingsWindowOpen() const { return show_settings_window_; }
+    void OpenWelcomeTab();
+    void OpenWorkspaceFolder(const std::string& folder);
+    void ShowGitCloneModal() { show_git_clone_modal_ = true; }
+    void ShowPluginsPanel() { show_plugins_ = true; show_file_explorer_ = false; show_source_control_ = false; }
+    WelcomeView& GetWelcomeView() { return welcome_view_; }
+    void ApplySettings(const AppSettings& s);
+    void SetEditorFontSize(int size);
+    void AdjustEditorFontSize(int delta);
+    void SetUiFontSize(int size);
+    void AdjustUiFontSize(int delta);
+    ImFont* GetEditorFont() const { return font_editor_; }
 
     struct ConfirmationModal {
         bool request_open = false;
@@ -101,6 +132,7 @@ private:
     void RenderGitModals();
     void ShowGitDiffModal(const std::string& path);
     void RenderGitDiffModal();
+    void RenderSettingsWindow();
     void SetupDockspace();
 
     // ── Session persistence ──────────────────────────────────────────────
@@ -119,6 +151,9 @@ private:
     CommandPalette    command_palette_;
     TerminalPanel     terminal_;
     ToastManager      toast_manager_;
+    SettingsManager   settings_manager_;
+    SettingsView      settings_view_;
+    WelcomeView       welcome_view_;
     std::unique_ptr<class PluginManager> plugin_manager_;
 
     ImFont*           font_regular_ = nullptr; // IBM Plex Sans UI
@@ -134,6 +169,7 @@ private:
     bool              show_source_control_= false;
     bool              show_terminal_      = true;
     bool              show_plugins_       = false;
+    int               selected_plugin_index_ = -1;
     bool              show_demo_window_   = false;
     bool              show_about_modal_   = false;
     bool              show_git_branch_modal_ = false;
@@ -147,9 +183,13 @@ private:
     std::string       git_diff_content_;
     bool              git_view_as_tree_       = false;
     bool              show_minimap_           = true;
+    bool              show_settings_window_   = false;
 
     SymbolIndex       symbol_index_;
     ConfirmationModal confirm_modal_;
+
+    std::thread           project_scan_thread_;
+    std::atomic<uint32_t> project_scan_generation_{0};
 };
 
 }  // namespace luce

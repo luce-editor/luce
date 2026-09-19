@@ -1,9 +1,5 @@
 -- ============================================================================
--- uppercase.lua — Convert selected text to UPPERCASE
---
--- A simple example Luce plugin showing how to manipulate editor text.
--- Install: drop this file into the plugins/ folder next to luce.exe.
--- Use:     Ctrl+Shift+P → "UPPERCASE: Convert Selection"
+-- uppercase / init.lua — Convert selected text to UPPERCASE
 -- ============================================================================
 
 luce.plugin = {
@@ -11,7 +7,6 @@ luce.plugin = {
     version     = "1.0.0",
     author      = "Luce Team",
     description = "Converts the current text selection to UPPERCASE.",
-    icon        = "🔤",
 }
 
 local function uppercase_selection()

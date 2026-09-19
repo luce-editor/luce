@@ -21,7 +21,8 @@ Luce's interface is built on **Dear ImGui (docking branch)** combined with the m
    - **Problems**: Central diagnostic table displaying workspace errors and warnings with copy actions.
    - **Output**: Dedicated read-only output logs from tools and background jobs.
    - **Terminal**: Embedded multi-tab terminal with VT100 emulation and PowerShell/Bash integration.
-6. **Status Bar**: Live diagnostics including Git branch status, language mode, cursor position (Ln, Col), file encoding, indentation style, and application version.
+6. **Status Bar**: Live diagnostics including dynamic theme-styled Git branch status, language mode, cursor position (Ln, Col), file encoding, indentation style, and application version.
+7. **Preferences & Settings**: Independent native OS settings window (`Ctrl+,`) inspired by Zed with animated toggle switches, theme gallery, and direct JSON editing (`Ctrl+Shift+,`) with real-time hot-reloading.
 
 ---
 

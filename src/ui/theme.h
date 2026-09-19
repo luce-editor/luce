@@ -79,6 +79,7 @@ public:
     void CycleTheme();
 
     std::vector<std::string> GetThemeNames() const;
+    const std::vector<Theme>& GetThemes() const { return themes_; }
 
     /// Load custom themes from a CSS / .lucetheme file.
     bool LoadThemeFromFile(const std::string& filepath);

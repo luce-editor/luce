@@ -25,6 +25,9 @@ struct LuaPluginInfo {
     std::string author      = "Unknown";
     std::string description = "";
     std::string icon        = "";
+    std::string readme_path = "";
+    std::string folder_path = "";
+    std::string script_path = "";
 };
 
 class LuaPlugin {

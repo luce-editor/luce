@@ -4,6 +4,7 @@
 // ============================================================================
 
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,9 @@ public:
 
     /// Open the palette in the given mode.
     void Open(PaletteMode mode = PaletteMode::Commands);
+
+    /// Open the palette with pre-filled text in the search buffer.
+    void OpenWithText(const std::string& text, PaletteMode mode = PaletteMode::Commands);
 
     /// Close the palette.
     void Close();
@@ -89,6 +93,7 @@ private:
     int                        selected_index_ = 0;
 
     std::vector<Command>       commands_;
+    mutable std::mutex         project_files_mutex_;
     std::vector<std::string>   project_files_;
     std::string                project_root_;
 

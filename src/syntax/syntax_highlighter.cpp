@@ -5,6 +5,8 @@
 #include "syntax_highlighter.h"
 #include "lexer_cmake.h"
 #include "lexer_cpp.h"
+#include "lexer_json.h"
+#include "lexer_lua.h"
 #include "lexer_markdown.h"
 #include "lexer_python.h"
 #include "lexer_rust.h"
@@ -31,6 +33,8 @@ SyntaxHighlighter::SyntaxHighlighter() {
     register_lexer(std::make_unique<LexerPython>());
     register_lexer(std::make_unique<LexerMarkdown>());
     register_lexer(std::make_unique<LexerCMake>());
+    register_lexer(std::make_unique<LexerLua>());
+    register_lexer(std::make_unique<LexerJson>());
 }
 
 bool SyntaxHighlighter::SetLanguageByExtension(const std::string& ext) {

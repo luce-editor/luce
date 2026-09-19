@@ -138,6 +138,13 @@ void TabBar::OpenFile(const std::string& path, const Theme* theme) {
         tab->editor.SetTheme(theme);
         tab->editor.SetFilePath(path);
         tab->editor.show_minimap = show_minimap_;
+        tab->editor.tab_size = tab_size_;
+        tab->editor.use_spaces = use_spaces_;
+        tab->editor.show_line_numbers = show_line_numbers_;
+        tab->editor.highlight_current_line = highlight_current_line_;
+        tab->editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel_;
+        tab->editor.cursor_blinking = cursor_blinking_;
+        if (on_font_zoom_) tab->editor.SetOnFontZoom(on_font_zoom_);
         tab->editor.SetSymbolIndex(symbol_index_);
         tab->editor.SetOnGoToDefinition(on_goto_definition_);
         tab->editor.SetCompletionProvider(completion_provider_);
@@ -147,6 +154,13 @@ void TabBar::OpenFile(const std::string& path, const Theme* theme) {
         tab->split_editor.SetTheme(theme);
         tab->split_editor.SetFilePath(path);
         tab->split_editor.show_minimap = show_minimap_;
+        tab->split_editor.tab_size = tab_size_;
+        tab->split_editor.use_spaces = use_spaces_;
+        tab->split_editor.show_line_numbers = show_line_numbers_;
+        tab->split_editor.highlight_current_line = highlight_current_line_;
+        tab->split_editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel_;
+        tab->split_editor.cursor_blinking = cursor_blinking_;
+        if (on_font_zoom_) tab->split_editor.SetOnFontZoom(on_font_zoom_);
         tab->split_editor.SetSymbolIndex(symbol_index_);
         tab->split_editor.SetOnGoToDefinition(on_goto_definition_);
         tab->split_editor.SetCompletionProvider(completion_provider_);
@@ -186,6 +200,167 @@ void TabBar::OpenFile(const std::string& path, const Theme* theme) {
     }
 }
 
+void TabBar::OpenExtensionTab(const LuaPluginInfo& info, const Theme* theme) {
+    std::string ext_title = "Extension: " + info.name;
+
+    // Check if an extension tab for this plugin is already open
+    for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {
+        if (tabs_[i]->is_extension && (tabs_[i]->title == ext_title || tabs_[i]->extension_info.name == info.name)) {
+            tabs_[i]->extension_info = info;
+            if (split_view_ && focused_pane_ == 1) {
+                split_active_ = i;
+            } else {
+                active_ = i;
+                tab_to_select_ = i;
+            }
+            return;
+        }
+    }
+
+    auto tab = std::make_unique<Tab>();
+    tab->is_extension = true;
+    tab->extension_info = info;
+    tab->title = ext_title;
+    tab->filepath = info.readme_path;
+    tab->buffer = std::make_unique<TextBuffer>();
+    tab->highlighter = std::make_unique<SyntaxHighlighter>();
+    tab->highlighter->SetLanguageByExtension(".md");
+
+    if (!info.readme_path.empty() && fs::exists(info.readme_path)) {
+        tab->buffer->LoadFromFile(info.readme_path);
+    } else {
+        std::string fallback_readme = "# " + info.name + "\n\n"
+            + (info.description.empty() ? "No description provided for this extension." : info.description) + "\n\n"
+            + "### Details\n\n"
+            + "- **Author:** " + (info.author.empty() ? "Unknown" : info.author) + "\n"
+            + "- **Version:** " + info.version + "\n"
+            + (info.folder_path.empty() ? "" : ("- **Location:** `" + info.folder_path + "`\n"));
+        tab->buffer->SetText(fallback_readme);
+    }
+
+    SyntaxHighlighter* hl = tab->highlighter.get();
+    tab->buffer->SetChangeCallback([hl](int line, int count) {
+        hl->InvalidateLines(line, count);
+    });
+
+    tab->editor.SetBuffer(tab->buffer.get());
+    tab->editor.SetHighlighter(tab->highlighter.get());
+    tab->editor.SetTheme(theme);
+    tab->editor.SetFilePath(info.readme_path);
+    tab->editor.show_minimap = false;
+
+    tabs_.push_back(std::move(tab));
+    int new_idx = static_cast<int>(tabs_.size()) - 1;
+    if (split_view_ && focused_pane_ == 1) {
+        split_active_ = new_idx;
+    } else {
+        active_ = new_idx;
+        tab_to_select_ = active_;
+    }
+}
+
+void TabBar::OpenSettingsTab(const Theme* theme) {
+    // Check if an existing settings tab is already open
+    for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {
+        if (tabs_[i]->is_settings) {
+            if (split_view_ && focused_pane_ == 1) {
+                split_active_ = i;
+            } else {
+                active_ = i;
+                tab_to_select_ = i;
+            }
+            return;
+        }
+    }
+
+    auto tab = std::make_unique<Tab>();
+    tab->is_settings = true;
+    tab->title = "Settings";
+    tab->buffer = std::make_unique<TextBuffer>();
+    tab->highlighter = std::make_unique<SyntaxHighlighter>();
+    tab->editor.SetBuffer(tab->buffer.get());
+    tab->editor.SetHighlighter(tab->highlighter.get());
+    tab->editor.SetTheme(theme);
+    tab->editor.show_minimap = false;
+    tab->split_editor.show_minimap = false;
+
+    tabs_.push_back(std::move(tab));
+    int new_idx = static_cast<int>(tabs_.size()) - 1;
+    if (split_view_ && focused_pane_ == 1) {
+        split_active_ = new_idx;
+    } else {
+        active_ = new_idx;
+        tab_to_select_ = new_idx;
+    }
+}
+
+void TabBar::OpenWelcomeTab(const Theme* theme) {
+    // Check if an existing welcome tab is already open
+    for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {
+        if (tabs_[i]->is_welcome) {
+            if (split_view_ && focused_pane_ == 1) {
+                split_active_ = i;
+            } else {
+                active_ = i;
+                tab_to_select_ = i;
+            }
+            return;
+        }
+    }
+
+    auto tab = std::make_unique<Tab>();
+    tab->is_welcome = true;
+    tab->title = "Welcome";
+    tab->buffer = std::make_unique<TextBuffer>();
+    tab->highlighter = std::make_unique<SyntaxHighlighter>();
+    tab->editor.SetBuffer(tab->buffer.get());
+    tab->editor.SetHighlighter(tab->highlighter.get());
+    tab->editor.SetTheme(theme);
+    tab->editor.show_minimap = false;
+    tab->split_editor.show_minimap = false;
+
+    tabs_.push_back(std::move(tab));
+    int new_idx = static_cast<int>(tabs_.size()) - 1;
+    if (split_view_ && focused_pane_ == 1) {
+        split_active_ = new_idx;
+    } else {
+        active_ = new_idx;
+        tab_to_select_ = new_idx;
+    }
+}
+
+void TabBar::ApplyEditorSettings(int tab_size, bool use_spaces, bool show_minimap,
+                                 bool show_line_numbers, bool highlight_current_line,
+                                 bool zoom_with_mouse_wheel, bool cursor_blinking) {
+    tab_size_ = tab_size;
+    use_spaces_ = use_spaces;
+    show_minimap_ = show_minimap;
+    show_line_numbers_ = show_line_numbers;
+    highlight_current_line_ = highlight_current_line;
+    zoom_with_mouse_wheel_ = zoom_with_mouse_wheel;
+    cursor_blinking_ = cursor_blinking;
+
+    for (auto& tab : tabs_) {
+        if (tab) {
+            tab->editor.tab_size = tab_size;
+            tab->editor.use_spaces = use_spaces;
+            tab->editor.show_minimap = show_minimap;
+            tab->editor.show_line_numbers = show_line_numbers;
+            tab->editor.highlight_current_line = highlight_current_line;
+            tab->editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel;
+            tab->editor.cursor_blinking = cursor_blinking;
+
+            tab->split_editor.tab_size = tab_size;
+            tab->split_editor.use_spaces = use_spaces;
+            tab->split_editor.show_minimap = show_minimap;
+            tab->split_editor.show_line_numbers = show_line_numbers;
+            tab->split_editor.highlight_current_line = highlight_current_line;
+            tab->split_editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel;
+            tab->split_editor.cursor_blinking = cursor_blinking;
+        }
+    }
+}
+
 void TabBar::NewFile(const Theme* theme) {
     auto tab         = std::make_unique<Tab>();
     tab->title       = "Untitled";
@@ -201,6 +376,13 @@ void TabBar::NewFile(const Theme* theme) {
     tab->editor.SetHighlighter(tab->highlighter.get());
     tab->editor.SetTheme(theme);
     tab->editor.show_minimap = show_minimap_;
+    tab->editor.tab_size = tab_size_;
+    tab->editor.use_spaces = use_spaces_;
+    tab->editor.show_line_numbers = show_line_numbers_;
+    tab->editor.highlight_current_line = highlight_current_line_;
+    tab->editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel_;
+    tab->editor.cursor_blinking = cursor_blinking_;
+    if (on_font_zoom_) tab->editor.SetOnFontZoom(on_font_zoom_);
     tab->editor.SetSymbolIndex(symbol_index_);
     tab->editor.SetOnGoToDefinition(on_goto_definition_);
     tab->editor.SetCompletionProvider(completion_provider_);
@@ -209,6 +391,13 @@ void TabBar::NewFile(const Theme* theme) {
     tab->split_editor.SetHighlighter(tab->highlighter.get());
     tab->split_editor.SetTheme(theme);
     tab->split_editor.show_minimap = show_minimap_;
+    tab->split_editor.tab_size = tab_size_;
+    tab->split_editor.use_spaces = use_spaces_;
+    tab->split_editor.show_line_numbers = show_line_numbers_;
+    tab->split_editor.highlight_current_line = highlight_current_line_;
+    tab->split_editor.zoom_with_mouse_wheel = zoom_with_mouse_wheel_;
+    tab->split_editor.cursor_blinking = cursor_blinking_;
+    if (on_font_zoom_) tab->split_editor.SetOnFontZoom(on_font_zoom_);
     tab->split_editor.SetSymbolIndex(symbol_index_);
     tab->split_editor.SetOnGoToDefinition(on_goto_definition_);
     tab->split_editor.SetCompletionProvider(completion_provider_);
@@ -220,7 +409,7 @@ void TabBar::NewFile(const Theme* theme) {
 
 bool TabBar::SaveActive() {
     auto* tab = ActiveTab();
-    if (!tab) return false;
+    if (!tab || tab->is_settings || tab->is_welcome || tab->is_extension) return false;
 
     if (tab->filepath.empty()) {
         std::string path = platform::SaveFileDialog();
@@ -338,7 +527,7 @@ bool TabBar::ReloadTab(int index) {
 void TabBar::ReloadAllFromDisk() {
     for (int i = static_cast<int>(tabs_.size()) - 1; i >= 0; --i) {
         auto& tab = tabs_[i];
-        if (tab->filepath.empty() || tab->is_image) continue;
+        if (tab->filepath.empty() || tab->is_image || tab->is_extension || tab->is_settings || tab->is_welcome) continue;
 
         if (!fs::exists(tab->filepath)) {
             if (!tab->buffer->IsDirty()) {
@@ -411,13 +600,40 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
         for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {
             auto& tab = tabs_[i];
             std::string label = tab->title;
-            if (tab->buffer->IsDirty()) label = "\xE2\x80\xA2 " + label;  // • main.cpp (Zed / VS Code style)
-            if (tab->show_markdown_preview) label += " (Preview)";
+            ImTextureID tab_icon = 0;
+            if (tab->is_welcome) {
+                label = "Welcome";
+            } else if (tab->is_settings) {
+                label = "Settings";
+            } else if (tab->is_extension) {
+                label = "     " + label; // Reserve space for plugin SVG icon
+                if (!tab->extension_info.icon.empty()) {
+                    tab_icon = IconManager::Instance().GetIconByName(tab->extension_info.icon);
+                    if (!tab_icon && fs::exists(tab->extension_info.icon)) {
+                        tab_icon = IconManager::Instance().GetTexture(tab->extension_info.icon, false);
+                    }
+                }
+                if (!tab_icon) {
+                    tab_icon = IconManager::Instance().GetIconByName("folder_type_plugin");
+                }
+            } else {
+                if (tab->buffer->IsDirty()) label = "\xE2\x80\xA2 " + label;  // • main.cpp (Zed / VS Code style)
+                if (tab->show_markdown_preview) label += " (Preview)";
+            }
             label += "###tab_" + std::to_string(i);
 
             bool open = true;
             ImGuiTabItemFlags item_flags = (tab_to_select_ >= 0 && i == tab_to_select_) ? ImGuiTabItemFlags_SetSelected : 0;
             bool tab_selected = ImGui::BeginTabItem(label.c_str(), &open, item_flags);
+            if (tab_icon) {
+                ImVec2 tab_min = ImGui::GetItemRectMin();
+                ImVec2 tab_max = ImGui::GetItemRectMax();
+                float icon_sz = 14.0f;
+                float icon_x = tab_min.x + ImGui::GetStyle().FramePadding.x + 1.0f;
+                float icon_y = tab_min.y + (tab_max.y - tab_min.y - icon_sz) * 0.5f;
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->AddImage(tab_icon, ImVec2(icon_x, icon_y), ImVec2(icon_x + icon_sz, icon_y + icon_sz));
+            }
             if (tab_selected) {
                 selected_this_frame = i;
                 ImGui::EndTabItem();
@@ -426,7 +642,14 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
             // Drag Source for Tab
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
                 ImGui::SetDragDropPayload("LUCE_TAB", &i, sizeof(int));
-                ImTextureID icon = IconManager::Instance().GetIconForFile(tab->filepath.empty() ? tab->title : tab->filepath);
+                ImTextureID icon = 0;
+                if (tab->is_welcome || tab->is_settings) {
+                    icon = 0;
+                } else if (tab->is_extension) {
+                    icon = IconManager::Instance().GetIconByName("folder_type_plugin");
+                } else {
+                    icon = IconManager::Instance().GetIconForFile(tab->filepath.empty() ? tab->title : tab->filepath);
+                }
                 if (icon) {
                     ImGui::Image(icon, ImVec2(16, 16));
                     ImGui::SameLine();
@@ -492,7 +715,17 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
         if (auto* tab = ActiveTab()) {
             std::string editor_id = "editor_" + std::to_string(active_);
 
-            if (tab->is_image) {
+            if (tab->is_welcome) {
+                if (render_welcome_cb_) {
+                    render_welcome_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (tab->is_settings) {
+                if (render_settings_cb_) {
+                    render_settings_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (tab->is_extension) {
+                RenderExtensionPage(tab, theme, bold_font, italic_font, h1_font, h2_font);
+            } else if (tab->is_image) {
                 ImGui::BeginChild(editor_id.c_str(), ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
                 if (tab->image_texture) {
                     ImVec2 avail_img = ImGui::GetContentRegionAvail();
@@ -582,11 +815,23 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
 
         // Left pane editor
         if (left_tab) {
-            std::string id = "editor_left_" + std::to_string(active_);
-            left_tab->editor.SetTheme(theme);
-            if (editor_font) ImGui::PushFont(editor_font);
-            left_tab->editor.Render(id.c_str());
-            if (editor_font) ImGui::PopFont();
+            if (left_tab->is_welcome) {
+                if (render_welcome_cb_) {
+                    render_welcome_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (left_tab->is_settings) {
+                if (render_settings_cb_) {
+                    render_settings_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (left_tab->is_extension) {
+                RenderExtensionPage(left_tab, theme, bold_font, italic_font, h1_font, h2_font);
+            } else {
+                std::string id = "editor_left_" + std::to_string(active_);
+                left_tab->editor.SetTheme(theme);
+                if (editor_font) ImGui::PushFont(editor_font);
+                left_tab->editor.Render(id.c_str());
+                if (editor_font) ImGui::PopFont();
+            }
         }
         ImGui::EndChild();
         ImVec2 left_pane_max = ImGui::GetItemRectMax();
@@ -638,7 +883,17 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
 
         // Right pane editor / preview
         if (right_tab) {
-            if (right_tab->show_markdown_preview) {
+            if (right_tab->is_welcome) {
+                if (render_welcome_cb_) {
+                    render_welcome_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (right_tab->is_settings) {
+                if (render_settings_cb_) {
+                    render_settings_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+                }
+            } else if (right_tab->is_extension) {
+                RenderExtensionPage(right_tab, theme, bold_font, italic_font, h1_font, h2_font);
+            } else if (right_tab->show_markdown_preview) {
                 right_tab->split_markdown_preview.Render("##md_prev_split", right_tab->buffer.get(), *theme,
                                                           bold_font, italic_font, h1_font, h2_font);
             } else {
@@ -685,7 +940,7 @@ Tab* TabBar::ActiveTab() {
 
 EditorView* TabBar::ActiveEditor() {
     auto* tab = ActiveTab();
-    if (!tab) return nullptr;
+    if (!tab || tab->is_settings || tab->is_welcome || tab->is_extension || tab->is_image) return nullptr;
     if (split_view_ && focused_pane_ == 1) {
         return &tab->split_editor;
     }
@@ -721,7 +976,7 @@ void TabBar::SetSplitActiveIndex(int idx) {
 
 bool TabBar::HasUnsaved() const {
     for (auto& t : tabs_) {
-        if (t->buffer->IsDirty()) return true;
+        if (!t->is_extension && !t->is_settings && !t->is_welcome && t->buffer && t->buffer->IsDirty()) return true;
     }
     return false;
 }
@@ -937,6 +1192,285 @@ void TabBar::HandleSplitPaneDropTargets(const Theme* theme, const ImVec2& left_m
     } else {
         RenderDropOverlay(right_min, right_max, "Right Pane", nullptr, false);
     }
+}
+
+void TabBar::RenderExtensionPage(Tab* tab, const Theme* theme, ImFont* bold_font, ImFont* italic_font,
+                                 ImFont* h1_font, ImFont* h2_font) {
+    if (!tab) return;
+    const auto& info = tab->extension_info;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, theme ? theme->background : ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
+    ImGui::BeginChild("##extension_page_view", ImVec2(0, 0), false);
+
+    float avail_w = ImGui::GetContentRegionAvail().x;
+    float pad_x = 28.0f;
+    float pad_top = 20.0f;
+
+    ImGui::SetCursorPos(ImVec2(pad_x, pad_top));
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 1. TOP BANNER / HERO AREA
+    // ──────────────────────────────────────────────────────────────────────────
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float icon_size = 64.0f;
+
+    // Render Extension Icon
+    ImTextureID icon_tex = 0;
+    if (!info.icon.empty()) {
+        icon_tex = IconManager::Instance().GetIconByName(info.icon);
+        if (!icon_tex && fs::exists(info.icon)) {
+            icon_tex = IconManager::Instance().GetTexture(info.icon, false);
+        }
+    }
+
+    ImVec2 icon_screen_pos = ImGui::GetCursorScreenPos();
+    if (icon_tex) {
+        ImGui::Image(icon_tex, ImVec2(icon_size, icon_size));
+    } else if (!info.icon.empty() && info.icon.size() <= 16 && (unsigned char)info.icon[0] >= 0x80) {
+        // Emoji icon
+        dl->AddRectFilled(icon_screen_pos, ImVec2(icon_screen_pos.x + icon_size, icon_screen_pos.y + icon_size), IM_COL32(34, 38, 46, 255), 8.0f);
+        dl->AddRect(icon_screen_pos, ImVec2(icon_screen_pos.x + icon_size, icon_screen_pos.y + icon_size), IM_COL32(56, 62, 74, 255), 8.0f, 0, 1.0f);
+        if (h1_font) ImGui::PushFont(h1_font);
+        ImVec2 em_sz = ImGui::CalcTextSize(info.icon.c_str());
+        dl->AddText(ImVec2(icon_screen_pos.x + (icon_size - em_sz.x) * 0.5f, icon_screen_pos.y + (icon_size - em_sz.y) * 0.5f),
+                    IM_COL32(255, 255, 255, 255), info.icon.c_str());
+        if (h1_font) ImGui::PopFont();
+        ImGui::Dummy(ImVec2(icon_size, icon_size));
+    } else {
+        ImTextureID fallback = IconManager::Instance().GetIconByName("folder_type_plugin");
+        if (fallback) {
+            ImGui::Image(fallback, ImVec2(icon_size, icon_size));
+        } else {
+            dl->AddRectFilled(icon_screen_pos, ImVec2(icon_screen_pos.x + icon_size, icon_screen_pos.y + icon_size), IM_COL32(34, 38, 46, 255), 8.0f);
+            dl->AddRect(icon_screen_pos, ImVec2(icon_screen_pos.x + icon_size, icon_screen_pos.y + icon_size), IM_COL32(56, 62, 74, 255), 8.0f, 0, 1.0f);
+            if (h1_font) ImGui::PushFont(h1_font);
+            ImVec2 em_sz = ImGui::CalcTextSize("🧩");
+            dl->AddText(ImVec2(icon_screen_pos.x + (icon_size - em_sz.x) * 0.5f, icon_screen_pos.y + (icon_size - em_sz.y) * 0.5f),
+                        IM_COL32(255, 255, 255, 255), "🧩");
+            if (h1_font) ImGui::PopFont();
+            ImGui::Dummy(ImVec2(icon_size, icon_size));
+        }
+    }
+
+    ImGui::SameLine(0.0f, 20.0f);
+
+    // Hero Text block
+    ImGui::BeginGroup();
+
+    // 1. Title
+    if (h1_font) ImGui::PushFont(h1_font);
+    else if (bold_font) ImGui::PushFont(bold_font);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.96f, 0.98f, 1.0f));
+    ImGui::TextUnformatted(info.name.c_str());
+    ImGui::PopStyleColor();
+    if (h1_font || bold_font) ImGui::PopFont();
+
+    // 2. Author and Version Pill and Status Badge
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.68f, 0.96f, 1.0f));
+    ImGui::TextUnformatted(info.author.empty() ? "Unknown" : info.author.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine(0.0f, 14.0f);
+
+    // Version pill
+    std::string ver_str = "v" + info.version;
+    ImVec2 ver_sz = ImGui::CalcTextSize(ver_str.c_str());
+    ImVec2 v_pos = ImGui::GetCursorScreenPos();
+    dl->AddRectFilled(ImVec2(v_pos.x - 4.0f, v_pos.y - 1.0f), ImVec2(v_pos.x + ver_sz.x + 4.0f, v_pos.y + ver_sz.y + 1.0f), IM_COL32(46, 50, 62, 220), 4.0f);
+    dl->AddRect(ImVec2(v_pos.x - 4.0f, v_pos.y - 1.0f), ImVec2(v_pos.x + ver_sz.x + 4.0f, v_pos.y + ver_sz.y + 1.0f), IM_COL32(65, 72, 88, 160), 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.75f, 0.82f, 1.0f));
+    ImGui::TextUnformatted(ver_str.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine(0.0f, 14.0f);
+
+    // Lua Plugin badge
+    std::string badge_str = "Lua Plugin";
+    ImVec2 b_sz = ImGui::CalcTextSize(badge_str.c_str());
+    ImVec2 b_pos = ImGui::GetCursorScreenPos();
+    dl->AddRectFilled(ImVec2(b_pos.x - 4.0f, b_pos.y - 1.0f), ImVec2(b_pos.x + b_sz.x + 4.0f, b_pos.y + b_sz.y + 1.0f), IM_COL32(28, 56, 84, 220), 4.0f);
+    dl->AddRect(ImVec2(b_pos.x - 4.0f, b_pos.y - 1.0f), ImVec2(b_pos.x + b_sz.x + 4.0f, b_pos.y + b_sz.y + 1.0f), IM_COL32(40, 80, 120, 200), 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.76f, 1.0f, 1.0f));
+    ImGui::TextUnformatted(badge_str.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+
+    // 3. Short Description
+    if (!info.description.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.74f, 0.78f, 1.0f));
+        ImGui::TextUnformatted(info.description.c_str());
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::Spacing();
+
+    // 4. Action Buttons (Uninstall, Open Folder, Edit Script)
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
+
+    // Uninstall Button (sleek red hover)
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.18f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.68f, 0.22f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.52f, 0.16f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.75f, 1.0f));
+    if (ImGui::Button("Uninstall")) {
+        if (on_uninstall_plugin_) {
+            on_uninstall_plugin_(info);
+        }
+    }
+    ImGui::PopStyleColor(4);
+
+    ImGui::SameLine(0.0f, 8.0f);
+
+    // Open Folder Button
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.21f, 0.26f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.30f, 0.38f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.18f, 0.22f, 1.0f));
+    if (ImGui::Button("Open Folder")) {
+        std::string folder = !info.folder_path.empty() ? info.folder_path : platform::GetDirectory(info.readme_path);
+        platform::OpenInFileExplorer(folder);
+    }
+
+    ImGui::SameLine(0.0f, 8.0f);
+
+    // Edit Script Button
+    if (ImGui::Button("Edit Script")) {
+        if (!info.script_path.empty() && fs::exists(info.script_path)) {
+            OpenFile(info.script_path, theme);
+        } else if (!info.folder_path.empty()) {
+            if (fs::exists(info.folder_path + "/init.lua")) {
+                OpenFile(info.folder_path + "/init.lua", theme);
+            }
+        }
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+
+    ImGui::EndGroup(); // Hero text block
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 2. SUBHEADER: DETAILS TAB
+    // ──────────────────────────────────────────────────────────────────────────
+    ImGui::SetCursorPosX(pad_x);
+
+    // "DETAILS" label
+    if (bold_font) ImGui::PushFont(bold_font);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.96f, 0.98f, 1.0f));
+    ImGui::TextUnformatted("DETAILS");
+    ImGui::PopStyleColor();
+    if (bold_font) ImGui::PopFont();
+
+    ImVec2 det_min = ImGui::GetItemRectMin();
+    ImVec2 det_max = ImGui::GetItemRectMax();
+
+    // Blue underline indicator directly underneath the DETAILS text (2px below text)
+    float indicator_y = det_max.y + 3.0f;
+    dl->AddLine(ImVec2(det_min.x, indicator_y), ImVec2(det_max.x, indicator_y), IM_COL32(0, 122, 204, 255), 2.5f);
+
+    // Separator line across full content width below DETAILS tab
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5.0f);
+    ImGui::SetCursorPosX(pad_x);
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 3. MAIN BODY: 2 COLUMNS (75% Markdown README, 25% Metadata Sidebar)
+    // ──────────────────────────────────────────────────────────────────────────
+    float total_body_w = ImGui::GetContentRegionAvail().x - pad_x;
+    float sidebar_w = 260.0f;
+    float readme_w = total_body_w - sidebar_w - 24.0f;
+    if (readme_w < 250.0f) {
+        readme_w = total_body_w; // Fall back to full width if window is very narrow
+        sidebar_w = 0.0f;
+    }
+
+    // Left Column: README.md via MarkdownPreview
+    ImGui::SetCursorPosX(pad_x);
+    ImGui::BeginChild("##ext_readme_pane", ImVec2(readme_w, 0), false);
+    tab->markdown_preview.Render("##ext_readme_prev", tab->buffer.get(), *theme,
+                                 bold_font, italic_font, h1_font, h2_font);
+    ImGui::EndChild();
+
+    // Right Column: Metadata Sidebar (if space permits)
+    if (sidebar_w > 0.0f) {
+        ImGui::SameLine(0.0f, 24.0f);
+        ImGui::BeginChild("##ext_sidebar_pane", ImVec2(sidebar_w, 0), false);
+
+        // Header: MORE INFO
+        if (bold_font) ImGui::PushFont(bold_font);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.86f, 0.90f, 1.0f));
+        ImGui::TextUnformatted("MORE INFO");
+        ImGui::PopStyleColor();
+        if (bold_font) ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        auto render_meta_item = [&](const char* label, const std::string& val) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.58f, 0.64f, 1.0f));
+            ImGui::TextUnformatted(label);
+            ImGui::PopStyleColor();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.90f, 0.94f, 1.0f));
+            ImGui::TextWrapped("%s", val.empty() ? "-" : val.c_str());
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+        };
+
+        std::string identifier = fs::path(info.folder_path).filename().string();
+        if (identifier.empty()) identifier = info.name;
+
+        std::string display_loc = info.folder_path;
+        std::ranges::replace(display_loc, '\\', '/');
+
+        render_meta_item("Identifier", identifier);
+        render_meta_item("Version", info.version);
+        render_meta_item("Author", info.author);
+        render_meta_item("Type", "Lua Script Extension");
+        render_meta_item("Location", display_loc);
+
+        if (!info.readme_path.empty()) {
+            render_meta_item("Documentation", fs::path(info.readme_path).filename().string());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Links section
+        if (bold_font) ImGui::PushFont(bold_font);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.86f, 0.90f, 1.0f));
+        ImGui::TextUnformatted("QUICK ACTIONS");
+        ImGui::PopStyleColor();
+        if (bold_font) ImGui::PopFont();
+
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.20f, 0.26f, 0.8f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.28f, 0.36f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.14f, 0.16f, 0.22f, 1.0f));
+
+        if (ImGui::Button("Open Documentation File", ImVec2(sidebar_w - 12.0f, 26.0f))) {
+            if (!info.readme_path.empty()) {
+                OpenFile(info.readme_path, theme);
+            }
+        }
+        if (ImGui::Button("Open in File Explorer", ImVec2(sidebar_w - 12.0f, 26.0f))) {
+            std::string folder = !info.folder_path.empty() ? info.folder_path : platform::GetDirectory(info.readme_path);
+            platform::OpenInFileExplorer(folder);
+        }
+
+        ImGui::PopStyleColor(3);
+
+        ImGui::EndChild();
+    }
+
+    ImGui::EndChild(); // ##extension_page_view
+    ImGui::PopStyleColor();
 }
 
 }  // namespace luce

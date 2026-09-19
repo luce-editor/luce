@@ -23,6 +23,7 @@ Luce wyposażony jest w intuicyjny zestaw skrótów klawiszowych zaprojektowanyc
 | `Tab` | Wcięcie / Rozwinięcie Emmet | Wstaw wcięcie lub rozwiń skrót Emmet w HTML (np. `div.container`, `ul>li*3`, `!`) |
 | `Ctrl + Z` | Cofnij (Undo) | Cofnij ostatnie zmiany w tekście |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Ponów (Redo) | Ponów uprzednio cofnięte zmiany |
+| `Ctrl + Kółko myszy` | Zoom czcionki edytora | Płynne zwiększanie i zmniejszanie rozmiaru czcionki kodu |
 | `F12` / `Ctrl + Enter` | Przejdź do definicji | Przeskocz do deklaracji symbolu w projekcie |
 
 ## Zarządzanie plikami i kartami
@@ -35,6 +36,8 @@ Luce wyposażony jest w intuicyjny zestaw skrótów klawiszowych zaprojektowanyc
 | `Ctrl + W` | Zamknij kartę | Zamknij aktywną kartę edytora |
 | `Ctrl + Tab` | Następna karta | Przełącz fokus na kolejną otwartą kartę |
 | `Ctrl + \` | Przełącz Split View | Podziel edytor na dwa niezależne panele obok siebie |
+| `Ctrl + ,` | Ustawienia (UI) | Otwórz graficzną kartę ustawień edytora |
+| `Ctrl + Shift + ,` | Otwórz plik ustawień | Otwórz plik konfiguracyjny `settings.json` bezpośrednio w edytorze |
 
 ## Narzędzia wyszukiwania i nawigacji
 

@@ -76,9 +76,15 @@ public:
 
     // ── Settings ──────────────────────────────────────────────────────────
 
-    int  tab_size      = 4;
-    bool use_spaces    = true;
-    bool show_minimap  = true;
+    int  tab_size               = 4;
+    bool use_spaces             = true;
+    bool show_minimap           = true;
+    bool show_line_numbers      = true;
+    bool highlight_current_line = true;
+    bool zoom_with_mouse_wheel  = true;
+    bool cursor_blinking        = true;
+
+    void SetOnFontZoom(std::function<void(int delta)> cb) { on_font_zoom_ = std::move(cb); }
 
 private:
     // ── Rendering helpers ─────────────────────────────────────────────────
@@ -178,6 +184,8 @@ private:
     void RenderAutocomplete(ImVec2 origin, float line_height, float char_width, float gutter_width);
     void UpdateAutocomplete();
     void ApplyAutocomplete();
+    bool IsLuaFile() const;
+    bool ExpandLuaFunctionSnippet(int cur_line, int start, int col);
 
     /// Current file path — used to resolve relative includes.
     std::string              current_file_path_;
@@ -192,6 +200,7 @@ private:
     class SymbolIndex*                                      symbol_index_ = nullptr;
     std::function<void(const std::string& path, int line)> on_goto_definition_;
     std::function<std::vector<std::string>(const std::string&, const std::string&, int, int)> completion_provider_;
+    std::function<void(int delta)>                         on_font_zoom_;
     bool                                                   minimap_dragging_ = false;
 
 public:

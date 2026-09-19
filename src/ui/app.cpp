@@ -42,11 +42,7 @@ App::App() {
     file_explorer_.SetOnOpenFolder([this]() {
         std::string folder = platform::OpenFolderDialog();
         if (!folder.empty()) {
-            file_explorer_.SetRoot(folder);
-            terminal_.SetWorkingDirectory(folder);
-            GitManager::Instance().SetRepoPath(folder);
-            ScanProjectFiles();
-            SaveSession();
+            OpenWorkspaceFolder(folder);
         }
     });
     file_explorer_.SetOnCloneRepository([this]() {
@@ -100,8 +96,31 @@ App::App() {
     tab_bar_.SetOnBeforeSave([this](const std::string& path) {
         if (plugin_manager_) plugin_manager_->OnBeforeSave(path);
     });
+    // Wire up Settings and Welcome tabs and Font Zoom on TabBar
+    tab_bar_.SetRenderSettingsCallback([this](const Theme* theme, ImFont* bold, ImFont* italic, ImFont* h1, ImFont* h2) {
+        settings_view_.Render(this, theme, bold, italic, h1, h2);
+    });
+    tab_bar_.SetRenderWelcomeCallback([this](const Theme* theme, ImFont* bold, ImFont* italic, ImFont* h1, ImFont* h2) {
+        welcome_view_.Render(this, theme, bold, italic, h1, h2);
+    });
+    tab_bar_.SetOnFontZoom([this](int delta) {
+        AdjustEditorFontSize(delta);
+    });
+
     tab_bar_.SetOnAfterSave([this](const std::string& path) {
         if (plugin_manager_) plugin_manager_->OnAfterSave(path);
+
+        std::string norm = path;
+        std::ranges::replace(norm, '\\', '/');
+        std::string cfg_path = settings_manager_.GetSettingsPath();
+        std::ranges::replace(cfg_path, '\\', '/');
+
+        if (norm == cfg_path || norm.ends_with("/settings.json")) {
+            if (settings_manager_.LoadFromFile(norm)) {
+                ApplySettings(settings_manager_.Get());
+                toast_manager_.ShowSuccess("Settings reloaded from settings.json", 2.5f);
+            }
+        }
     });
     tab_bar_.SetOnTextChanged([this](int line, int count) {
         if (plugin_manager_) plugin_manager_->OnTextChanged(line, count);
@@ -112,9 +131,51 @@ App::App() {
         }
         return std::vector<std::string>{};
     });
+    tab_bar_.SetOnUninstallPlugin([this](const LuaPluginInfo& info) {
+        if (!plugin_manager_) return;
+        const auto& plugins = plugin_manager_->GetLoadedPlugins();
+        for (size_t i = 0; i < plugins.size(); ++i) {
+            if (plugins[i]->GetInfo().name == info.name || plugins[i]->GetInfo().folder_path == info.folder_path) {
+                RequestConfirmation(
+                    "Delete Plugin",
+                    "Are you sure you want to uninstall and permanently delete '" + info.name + "' from disk?",
+                    "Delete Plugin",
+                    ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
+                    [this, i, info]() {
+                        for (int t = 0; t < tab_bar_.TabCount(); ++t) {
+                            const auto& tabs = tab_bar_.GetTabs();
+                            if (tabs[t]->is_extension && tabs[t]->extension_info.name == info.name) {
+                                tab_bar_.CloseTab(t);
+                                break;
+                            }
+                        }
+                        if (plugin_manager_->UninstallPlugin(i, true)) {
+                            selected_plugin_index_ = -1;
+                            toast_manager_.ShowSuccess("Plugin '" + info.name + "' deleted successfully.");
+                        } else {
+                            toast_manager_.ShowError("Failed to delete plugin files.");
+                        }
+                    }
+                );
+                return;
+            }
+        }
+    });
 
     // Restore previous folder and open files FIRST so explorer root is known
     LoadSession();
+
+    // If no files/tabs are open, check if Welcome Screen should be shown
+    if (tab_bar_.TabCount() == 0) {
+        if (settings_manager_.Get().show_welcome_on_startup) {
+            OpenWelcomeTab();
+        } else {
+            tab_bar_.NewFile(&theme_manager_.Active());
+        }
+    }
+
+    // Apply settings from settings.json
+    ApplySettings(settings_manager_.Get());
 
     // Sync Git repository with restored root
     GitManager::Instance().SetRepoPath(file_explorer_.Root());
@@ -133,6 +194,10 @@ App::App() {
 
 App::~App() {
     SaveSession();
+    ++project_scan_generation_;
+    if (project_scan_thread_.joinable()) {
+        project_scan_thread_.join();
+    }
 }
 
 ImVec4 App::GetBackgroundColor() const {
@@ -145,14 +210,17 @@ void App::Render() {
     // Apply theme (in case it was changed via command palette).
     theme_manager_.ApplyToImGui();
 
+    // Menu bar (rendered first so viewport->WorkPos and WorkSize reflect menu bar height).
+    RenderMenuBar();
+
     // Full-viewport dockspace.
     SetupDockspace();
 
-    // Menu bar.
-    RenderMenuBar();
-
     // Git Modals (Confirmation, Branches, Remotes, Stashes, Tags, Clone, Output)
     RenderGitModals();
+
+    // Native Settings Window (Zed style)
+    RenderSettingsWindow();
 
     // Sidebar panel (contains horizontal activity bar + active view).
     bool show_sidebar = show_file_explorer_ || show_source_control_ || show_plugins_;
@@ -261,9 +329,14 @@ void App::Render() {
     }
 
     // Editor panel (tabs + code).
-    ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse);
+    ImGuiWindowClass editor_window_class;
+    editor_window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar;
+    ImGui::SetNextWindowClass(&editor_window_class);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse);
     tab_bar_.Render(&theme_manager_.Active(), font_editor_, font_bold_, font_italic_, font_h1_, font_h2_);
     ImGui::End();
+    ImGui::PopStyleVar();
 
     // Bottom panel.
     if (show_terminal_) {
@@ -485,6 +558,13 @@ void App::Render() {
         SaveSession();
     }
 
+    // Settings shortcuts (Ctrl+Shift+, for settings.json, Ctrl+, for Settings UI)
+    if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Comma)) {
+        OpenSettingsFile();
+    } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Comma)) {
+        OpenSettingsWindow();
+    }
+
     // Go to Definition shortcuts
     if (ImGui::IsKeyPressed(ImGuiKey_F12)) {
         if (auto* editor = tab_bar_.ActiveEditor()) {
@@ -524,7 +604,7 @@ void App::SetupDockspace() {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-                             ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
+                             ImGuiWindowFlags_NoNavFocus;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -543,6 +623,10 @@ void App::SetupDockspace() {
         ImGuiID dock_main     = dockspace_id;
         ImGuiID dock_left     = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Left,   0.20f, nullptr, &dock_main);
         ImGuiID dock_bottom   = ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Down,   0.25f, nullptr, &dock_main);
+
+        if (ImGuiDockNode* node_main = ImGui::DockBuilderGetNode(dock_main)) {
+            node_main->LocalFlags |= ImGuiDockNodeFlags_NoTabBar;
+        }
 
         ImGui::DockBuilderDockWindow("Sidebar", dock_left);
         ImGui::DockBuilderDockWindow("Editor",   dock_main);
@@ -571,9 +655,7 @@ void App::RenderMenuBar() {
             if (ImGui::MenuItem("Open Folder...")) {
                 std::string folder = platform::OpenFolderDialog();
                 if (!folder.empty()) {
-                    file_explorer_.SetRoot(folder);
-                    ScanProjectFiles();
-                    SaveSession();
+                    OpenWorkspaceFolder(folder);
                 }
             }
             ImGui::Separator();
@@ -584,6 +666,13 @@ void App::RenderMenuBar() {
                     tab_bar_.SaveActiveAs(p);
                     SaveSession();
                 }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Open Settings File", "Ctrl+Shift+,")) {
+                OpenSettingsFile();
+            }
+            if (ImGui::MenuItem("Settings", "Ctrl+,")) {
+                OpenSettingsWindow();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Close Editor",    "Ctrl+W")) {
@@ -635,6 +724,8 @@ void App::RenderMenuBar() {
                     bool selected = (name == theme_manager_.Active().name);
                     if (ImGui::MenuItem(name.c_str(), nullptr, selected)) {
                         theme_manager_.SetTheme(name);
+                        settings_manager_.GetMutable().theme_name = name;
+                        settings_manager_.SaveToFile();
                         SaveSession();
                     }
                 }
@@ -669,10 +760,25 @@ void App::RenderMenuBar() {
                     toast_manager_.ShowSuccess("Plugins: Reloaded all plugins.");
                 }
             }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Reload Icons")) {
+                IconManager::Instance().Reload();
+                toast_manager_.ShowSuccess("Icons: Reloaded all icons.");
+            }
+            if (ImGui::MenuItem("Open Icons Folder...")) {
+                platform::OpenInFileExplorer(IconManager::Instance().GetCustomIconsDir());
+            }
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("Welcome (Getting Started)")) {
+                OpenWelcomeTab();
+            }
+            if (ImGui::MenuItem("Documentation")) {
+                platform::OpenURL("https://luce-editor.github.io");
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("About Luce")) {
                 show_about_modal_ = true;
             }
@@ -1348,11 +1454,7 @@ void App::RenderGitModals() {
                 std::string err;
                 toast_manager_.ShowInfo("Git: Cloning repository in progress...");
                 if (GitManager::CloneRepo(clone_url, clone_target, err)) {
-                    file_explorer_.SetRoot(clone_target);
-                    terminal_.SetWorkingDirectory(clone_target);
-                    ScanProjectFiles();
-                    git.SetRepoPath(clone_target);
-                    SaveSession();
+                    OpenWorkspaceFolder(clone_target);
                     toast_manager_.ShowSuccess("Git: Cloned and opened workspace successfully!");
                     clone_url[0] = '\0';
                     clone_target[0] = '\0';
@@ -1639,130 +1741,124 @@ void App::RenderPluginsPanel() {
         return;
     }
 
-    // Scrollable area for plugin cards, reserving space for fixed bottom action bar
+    // Scrollable area for plugin items, reserving space for fixed bottom action bar
     float bottom_bar_h = 44.0f;
     ImGui::BeginChild("##plugins_scroll_list", ImVec2(0, -bottom_bar_h), false);
 
     std::optional<size_t> plugin_to_uninstall;
 
+    // Sync selected_plugin_index_ with active tab if it's an extension tab
+    if (auto* active_tab = tab_bar_.ActiveTab()) {
+        if (active_tab->is_extension) {
+            for (size_t i = 0; i < plugins.size(); ++i) {
+                if (plugins[i]->GetInfo().name == active_tab->extension_info.name) {
+                    selected_plugin_index_ = static_cast<int>(i);
+                    break;
+                }
+            }
+        }
+    }
+
     float list_avail_w = ImGui::GetContentRegionAvail().x;
-    float card_pad = 6.0f;
-    float card_w = list_avail_w - card_pad * 2.0f;
-    if (card_w < 100.0f) card_w = 100.0f;
+    float row_h = 62.0f;
 
     for (size_t i = 0; i < plugins.size(); ++i) {
         const auto& p = plugins[i];
         const auto& info = p->GetInfo();
         ImGui::PushID((int)i);
 
-        ImGui::SetCursorPosX(card_pad);
-        ImVec2 card_top_left = ImGui::GetCursorScreenPos();
+        bool is_selected = (selected_plugin_index_ == static_cast<int>(i));
+
+        ImVec2 row_start = ImGui::GetCursorScreenPos();
+        ImVec2 row_end = ImVec2(row_start.x + list_avail_w, row_start.y + row_h);
+
+        // Invisible button spanning the whole row for clicking and hovering
+        bool clicked = ImGui::InvisibleButton("##plugin_row_btn", ImVec2(list_avail_w, row_h));
+        bool hovered = ImGui::IsItemHovered();
+
+        if (clicked) {
+            selected_plugin_index_ = static_cast<int>(i);
+            tab_bar_.OpenExtensionTab(info, &theme_manager_.Active());
+        }
 
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->ChannelsSplit(2);
-        dl->ChannelsSetCurrent(1);
 
-        // Card content group
-        ImGui::BeginGroup();
+        // Background highlight
+        if (is_selected) {
+            dl->AddRectFilled(row_start, row_end, IM_COL32(35, 48, 68, 255));
+            // Left blue active indicator line (VS Code style)
+            dl->AddRectFilled(row_start, ImVec2(row_start.x + 3.0f, row_end.y), IM_COL32(0, 122, 204, 255));
+        } else if (hovered) {
+            dl->AddRectFilled(row_start, row_end, IM_COL32(36, 40, 48, 180));
+        }
 
-        // Top inside padding
-        ImGui::Dummy(ImVec2(card_w, 6.0f));
+        // 1px subtle divider between items
+        dl->AddLine(ImVec2(row_start.x, row_end.y), ImVec2(row_end.x, row_end.y), IM_COL32(44, 48, 58, 120), 1.0f);
 
-        // Row with Icon and details
-        float inner_pad = 8.0f;
-        ImGui::SetCursorPosX(card_pad + inner_pad);
-        float plugin_icon_size = 36.0f;
-        RenderPluginIcon(info, plugin_icon_size);
+        // Render Icon (36x36) vertically centered
+        float icon_sz = 36.0f;
+        float icon_x = row_start.x + 10.0f;
+        float icon_y = row_start.y + (row_h - icon_sz) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(icon_x, icon_y));
+        RenderPluginIcon(info, icon_sz);
 
-        ImGui::SameLine(0.0f, 10.0f);
+        // Text area to the right of icon
+        float text_x = icon_x + icon_sz + 10.0f;
+        float del_btn_sz = 18.0f;
+        float text_max_x = row_end.x - del_btn_sz - 12.0f;
 
-        ImGui::BeginGroup();
-
-        // Line 1: Header row with Name + Version
+        // Line 1: Name + Version
+        ImGui::SetCursorScreenPos(ImVec2(text_x, row_start.y + 7.0f));
         if (font_bold_) ImGui::PushFont(font_bold_);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.97f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, is_selected ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.92f, 0.93f, 0.96f, 1.0f));
         ImGui::TextUnformatted(info.name.c_str());
         ImGui::PopStyleColor();
         if (font_bold_) ImGui::PopFont();
 
         ImGui::SameLine(0.0f, 6.0f);
-
-        // Small version pill
-        std::string ver_str = "v" + info.version;
-        ImVec2 ver_sz = ImGui::CalcTextSize(ver_str.c_str());
-        ImVec2 v_pos = ImGui::GetCursorScreenPos();
-        dl->AddRectFilled(ImVec2(v_pos.x - 3.0f, v_pos.y), ImVec2(v_pos.x + ver_sz.x + 3.0f, v_pos.y + ver_sz.y + 1.0f), IM_COL32(50, 54, 66, 200), 3.0f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.72f, 0.78f, 1.0f));
-        ImGui::TextUnformatted(ver_str.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.58f, 0.64f, 1.0f));
+        ImGui::Text("v%s", info.version.c_str());
         ImGui::PopStyleColor();
 
-        // Line 2: Author
+        // Line 2: Description (1 line, clipped)
+        ImGui::SetCursorScreenPos(ImVec2(text_x, row_start.y + 25.0f));
+        std::string desc = info.description.empty() ? "No description provided." : info.description;
+        ImGui::PushClipRect(ImVec2(text_x, row_start.y + 25.0f), ImVec2(text_max_x, row_start.y + 41.0f), true);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.67f, 0.72f, 1.0f));
+        ImGui::TextUnformatted(desc.c_str());
+        ImGui::PopStyleColor();
+        ImGui::PopClipRect();
+
+        // Line 3: Author
+        ImGui::SetCursorScreenPos(ImVec2(text_x, row_start.y + 41.0f));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.65f, 0.90f, 1.0f));
         ImGui::TextUnformatted(info.author.c_str());
         ImGui::PopStyleColor();
 
-        // Line 3: Description wrapped
-        float desc_avail_w = card_w - inner_pad * 2.0f - plugin_icon_size - 18.0f;
-        if (desc_avail_w > 30.0f) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.67f, 0.72f, 1.0f));
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + desc_avail_w);
-            ImGui::TextWrapped("%s", info.description.empty() ? "No description provided." : info.description.c_str());
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
+        // Delete button on the right (visible when row is hovered or selected)
+        if (hovered || is_selected) {
+            ImGui::SetCursorScreenPos(ImVec2(row_end.x - del_btn_sz - 8.0f, row_start.y + (row_h - del_btn_sz) * 0.5f));
+            ImTextureID delete_icon = IconManager::Instance().GetIconByName("delete");
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 0.35f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.25f, 0.25f, 0.6f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1.0f, 1.0f));
+            if (delete_icon) {
+                if (ImGui::ImageButton("##del_btn", delete_icon, ImVec2(del_btn_sz, del_btn_sz))) {
+                    plugin_to_uninstall = i;
+                }
+            } else {
+                if (ImGui::SmallButton("×##del_btn")) {
+                    plugin_to_uninstall = i;
+                }
+            }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Uninstall Plugin");
         }
 
-        ImGui::EndGroup(); // text group
-
-        // Bottom inside padding
-        ImGui::Dummy(ImVec2(card_w, 6.0f));
-
-        ImGui::EndGroup(); // card group
-
-        // Calculate bounding box for card
-        ImVec2 actual_card_max = ImGui::GetItemRectMax();
-        ImVec2 card_max = ImVec2(card_top_left.x + card_w, actual_card_max.y);
-
-        bool is_card_hovered = ImGui::IsMouseHoveringRect(card_top_left, card_max);
-
-        dl->ChannelsSetCurrent(0);
-        ImU32 card_bg = is_card_hovered ? IM_COL32(36, 40, 48, 220) : IM_COL32(30, 32, 38, 180);
-        ImU32 card_border = is_card_hovered ? IM_COL32(75, 82, 98, 230) : IM_COL32(52, 56, 68, 160);
-
-        dl->AddRectFilled(card_top_left, card_max, card_bg, 6.0f);
-        dl->AddRect(card_top_left, card_max, card_border, 6.0f, 0, 1.0f);
-
-        dl->ChannelsMerge();
-
-        // Render delete button at top-right of the card
-        ImVec2 saved_pos = ImGui::GetCursorScreenPos();
-        float del_btn_size = 16.0f;
-        ImVec2 btn_pos(card_top_left.x + card_w - del_btn_size - 12.0f, card_top_left.y + 10.0f);
-        ImGui::SetCursorScreenPos(btn_pos);
-
-        ImTextureID delete_icon = IconManager::Instance().GetIconByName("delete");
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 0.35f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.25f, 0.25f, 0.6f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
-        if (delete_icon) {
-            if (ImGui::ImageButton("##del_btn", delete_icon, ImVec2(del_btn_size, del_btn_size))) {
-                plugin_to_uninstall = i;
-            }
-        } else {
-            if (ImGui::SmallButton("×##del_btn")) {
-                plugin_to_uninstall = i;
-            }
-        }
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Uninstall & Delete Plugin from disk");
-
-        // Restore cursor back to the natural bottom of the card
-        ImGui::SetCursorScreenPos(saved_pos);
-
-        // Natural ImGui vertical spacing between cards
-        ImGui::Spacing();
-        ImGui::Spacing();
+        // Restore cursor position for the next row
+        ImGui::SetCursorScreenPos(ImVec2(row_start.x, row_end.y));
 
         ImGui::PopID();
     }
@@ -1777,7 +1873,15 @@ void App::RenderPluginsPanel() {
                 "Delete Plugin",
                 ImVec4(0.85f, 0.25f, 0.25f, 1.0f),
                 [this, idx, p_name]() {
+                    for (int t = 0; t < tab_bar_.TabCount(); ++t) {
+                        const auto& tabs = tab_bar_.GetTabs();
+                        if (tabs[t]->is_extension && tabs[t]->extension_info.name == p_name) {
+                            tab_bar_.CloseTab(t);
+                            break;
+                        }
+                    }
                     if (plugin_manager_->UninstallPlugin(idx, true)) {
+                        selected_plugin_index_ = -1;
                         toast_manager_.ShowSuccess("Plugin '" + p_name + "' deleted successfully.");
                     } else {
                         toast_manager_.ShowError("Failed to delete plugin files.");
@@ -2470,7 +2574,10 @@ void App::RenderSourceControl() {
                     std::string full_path = git.GetRepoPath() + "/" + item.path;
                     tab_bar_.OpenFile(full_path, &theme_manager_.Active());
                 }
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("%s", item.path.c_str());
+                }
 
                 ImGui::SameLine(item_right);
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
@@ -2554,7 +2661,10 @@ void App::RenderSourceControl() {
                     std::string full_path = git.GetRepoPath() + "/" + item.path;
                     tab_bar_.OpenFile(full_path, &theme_manager_.Active());
                 }
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", item.path.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("%s", item.path.c_str());
+                }
 
                 ImGui::SameLine(item_right);
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
@@ -2608,6 +2718,7 @@ void App::RenderStatusBar() {
     ImGuiViewport* vp = ImGui::GetMainViewport();
     float bar_height  = ImGui::GetFrameHeight() + 4.0f;
 
+    ImGui::SetNextWindowViewport(vp->ID);
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - bar_height));
     ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, bar_height));
 
@@ -2618,6 +2729,12 @@ void App::RenderStatusBar() {
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing);
+
+    // Subtle 1px top border line matching theme's status bar foreground
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p_min = ImGui::GetWindowPos();
+    ImVec2 p_max = ImVec2(p_min.x + ImGui::GetWindowWidth(), p_min.y);
+    dl->AddLine(p_min, p_max, ImGui::ColorConvertFloat4ToU32(ImVec4(t.statusbar_fg.x, t.statusbar_fg.y, t.statusbar_fg.z, 0.20f)), 1.0f);
 
     ImGui::PushStyleColor(ImGuiCol_Text, t.statusbar_fg);
 
@@ -2635,9 +2752,9 @@ void App::RenderStatusBar() {
         branch_str += "  ";
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.75f, 1.0f, 0.2f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.75f, 1.0f, 0.35f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.75f, 1.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(t.statusbar_fg.x, t.statusbar_fg.y, t.statusbar_fg.z, 0.18f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(t.statusbar_fg.x, t.statusbar_fg.y, t.statusbar_fg.z, 0.28f));
+        ImGui::PushStyleColor(ImGuiCol_Text, t.statusbar_fg);
 
         if (ImGui::SmallButton(branch_str.c_str())) {
             show_git_branch_modal_ = true;
@@ -2647,37 +2764,51 @@ void App::RenderStatusBar() {
         }
 
         ImGui::PopStyleColor(4);
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, 16.0f * ui_scale_);
     }
 
-    // Language.
+    // Language / Tab status.
     if (auto* tab = tab_bar_.ActiveTab()) {
-        ImGui::Text("%s", tab->highlighter->GetLanguageName());
-        ImGui::SameLine(200);
+        if (tab->is_welcome) {
+            ImGui::TextUnformatted("Welcome");
+        } else if (tab->is_settings) {
+            ImGui::TextUnformatted("Settings");
+        } else if (tab->is_extension) {
+            ImGui::Text("Extension: %s", tab->extension_info.name.c_str());
+        } else if (tab->is_image) {
+            ImGui::TextUnformatted("Image Viewer");
+        } else {
+            if (tab->highlighter) {
+                ImGui::TextUnformatted(tab->highlighter->GetLanguageName());
+            } else {
+                ImGui::TextUnformatted("Plain Text");
+            }
+            ImGui::SameLine(0.0f, 20.0f * ui_scale_);
 
-        // Cursor position.
-        auto& pos = tab->editor.GetCursors().Primary().position;
-        ImGui::Text("Ln %d, Col %d", pos.line + 1, pos.column + 1);
-        ImGui::SameLine(380);
+            // Cursor position.
+            auto& pos = tab->editor.GetCursors().Primary().position;
+            ImGui::Text("Ln %d, Col %d", pos.line + 1, pos.column + 1);
+            ImGui::SameLine(0.0f, 20.0f * ui_scale_);
 
-        // Encoding.
-        ImGui::Text("UTF-8");
-        ImGui::SameLine(460);
+            // Encoding.
+            ImGui::TextUnformatted("UTF-8");
+            ImGui::SameLine(0.0f, 20.0f * ui_scale_);
 
-        // Indent.
-        if (tab->editor.use_spaces)
-            ImGui::Text("Spaces: %d", tab->editor.tab_size);
-        else
-            ImGui::Text("Tab Size: %d", tab->editor.tab_size);
+            // Indent.
+            if (tab->editor.use_spaces)
+                ImGui::Text("Spaces: %d", tab->editor.tab_size);
+            else
+                ImGui::Text("Tab Size: %d", tab->editor.tab_size);
+        }
     } else {
-        ImGui::Text("No file open");
+        ImGui::TextUnformatted("No file open");
     }
 
     // Right-aligned: theme name + version.
     std::string right_text = "Luce v" LUCE_VERSION;
     float right_width = ImGui::CalcTextSize(right_text.c_str()).x;
     ImGui::SameLine(ImGui::GetWindowWidth() - right_width - 12);
-    ImGui::Text("%s", right_text.c_str());
+    ImGui::TextUnformatted(right_text.c_str());
 
     ImGui::PopStyleColor();
     ImGui::End();
@@ -2710,6 +2841,36 @@ void App::RegisterCommands() {
             GitManager::Instance().SetRepoPath(folder);
             SaveSession();
         }
+    }});
+    command_palette_.RegisterCommand({"help.welcome", "Help: Welcome (Getting Started)", "", [this]() {
+        OpenWelcomeTab();
+    }});
+    command_palette_.RegisterCommand({"app.open_settings", "Preferences: Open Settings (UI)", "Ctrl+,", [this]() {
+        OpenSettingsWindow();
+    }});
+    command_palette_.RegisterCommand({"app.open_settings_file", "Preferences: Open Settings (JSON)", "Ctrl+Shift+,", [this]() {
+        OpenSettingsFile();
+    }});
+    command_palette_.RegisterCommand({"icons.open_folder", "Icons: Open Custom Icons Folder", "", [this]() {
+        platform::OpenInFileExplorer(IconManager::Instance().GetCustomIconsDir());
+    }});
+    command_palette_.RegisterCommand({"icons.open_config", "Icons: Open icons.json Configuration", "", [this]() {
+        OpenIconsConfigFile();
+    }});
+    command_palette_.RegisterCommand({"icons.reload", "Icons: Reload Icons", "", [this]() {
+        IconManager::Instance().Reload();
+        toast_manager_.ShowSuccess("Icons: Reloaded all icons.");
+    }});
+    command_palette_.RegisterCommand({"editor.font_zoom_in", "Editor: Increase Font Size", "", [this]() {
+        AdjustEditorFontSize(1);
+    }});
+    command_palette_.RegisterCommand({"editor.font_zoom_out", "Editor: Decrease Font Size", "", [this]() {
+        AdjustEditorFontSize(-1);
+    }});
+    command_palette_.RegisterCommand({"editor.font_zoom_reset", "Editor: Reset Font Size", "", [this]() {
+        SetEditorFontSize(15);
+        settings_manager_.SaveToFile();
+        toast_manager_.ShowInfo("Editor Font Size reset to 15px", 1.2f);
     }});
     command_palette_.RegisterCommand({"view.toggle_terminal", "Toggle Terminal", "Ctrl+`", [this]() {
         show_terminal_ = !show_terminal_;
@@ -2926,6 +3087,8 @@ void App::RegisterCommands() {
     for (auto& name : theme_manager_.GetThemeNames()) {
         command_palette_.RegisterCommand({"theme." + name, "Theme: " + name, "", [this, name]() {
             theme_manager_.SetTheme(name);
+            settings_manager_.GetMutable().theme_name = name;
+            settings_manager_.SaveToFile();
             SaveSession();
         }});
     }
@@ -2948,47 +3111,212 @@ void App::RegisterCommands() {
 
 /// Recursively scan the project root for files (used by Quick Open).
 void App::ScanProjectFiles() {
-    std::vector<std::string> files;
     std::string root = file_explorer_.Root();
     if (root.empty()) return;
 
-    std::error_code ec;
-    auto iter = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
-    for (const auto& entry : iter) {
-        if (ec) break;
-        if (!entry.is_regular_file()) continue;
-
-        std::string name = entry.path().filename().string();
-        // Skip hidden files and common noisy directories.
-        std::string path_str = entry.path().string();
-        if (path_str.find(".git") != std::string::npos) continue;
-        if (path_str.find("node_modules") != std::string::npos) continue;
-        if (path_str.find("build") != std::string::npos) continue;
-        if (path_str.find("target") != std::string::npos) continue;
-
-        std::ranges::replace(path_str, '\\', '/');
-        // Store relative path for cleaner display.
-        if (path_str.starts_with(root)) {
-            path_str = path_str.substr(root.size());
-            if (!path_str.empty() && path_str[0] == '/') path_str = path_str.substr(1);
-        }
-        files.push_back(path_str);
-
-        // Limit to avoid scanning enormous trees.
-        if (files.size() > 10000) break;
-    }
-
-    std::ranges::sort(files);
-    command_palette_.SetProjectFiles(files);
     command_palette_.SetProjectRoot(root);
     symbol_index_.Clear();
     symbol_index_.IndexDirectoryAsync(root);
+
+    const uint32_t current_gen = ++project_scan_generation_;
+
+    if (project_scan_thread_.joinable()) {
+        project_scan_thread_.detach();
+    }
+
+    project_scan_thread_ = std::thread([this, root, current_gen]() {
+        std::vector<std::string> files;
+        std::error_code ec;
+        auto iter = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+        auto end = fs::recursive_directory_iterator();
+
+        while (iter != end && !ec) {
+            if (project_scan_generation_.load() != current_gen) {
+                return;
+            }
+
+            const auto& entry = *iter;
+            if (entry.is_directory(ec)) {
+                std::string dirname = entry.path().filename().string();
+                if (dirname == ".git" || dirname == "node_modules" || dirname == "build" ||
+                    dirname == "target" || dirname == "dist" || dirname == "out" ||
+                    dirname == "__pycache__" || dirname == ".vs" || dirname == ".vscode" ||
+                    dirname == ".idea") {
+                    iter.disable_recursion_pending();
+                }
+                iter.increment(ec);
+                continue;
+            }
+
+            if (entry.is_regular_file(ec)) {
+                std::string path_str = entry.path().string();
+                std::ranges::replace(path_str, '\\', '/');
+                // Store relative path for cleaner display.
+                if (path_str.starts_with(root)) {
+                    path_str = path_str.substr(root.size());
+                    if (!path_str.empty() && path_str[0] == '/') path_str = path_str.substr(1);
+                }
+                files.push_back(std::move(path_str));
+
+                // Limit to avoid scanning enormous trees.
+                if (files.size() >= 15000) break;
+            }
+
+            iter.increment(ec);
+        }
+
+        if (project_scan_generation_.load() == current_gen) {
+            std::ranges::sort(files);
+            command_palette_.SetProjectFiles(files);
+        }
+    });
 }
 
 void App::SetMinimapEnabled(bool enabled) {
     show_minimap_ = enabled;
     tab_bar_.SetMinimapEnabled(show_minimap_);
     SaveSession();
+}
+
+void App::OpenSettingsFile() {
+    settings_manager_.EnsureDefaultSettingsFile();
+    std::string path = settings_manager_.GetSettingsPath();
+    tab_bar_.OpenFile(path, &theme_manager_.Active());
+}
+
+void App::OpenIconsConfigFile() {
+    std::string path = IconManager::Instance().GetConfigPath();
+    if (path.empty()) {
+        path = IconManager::Instance().GetCustomIconsDir() + "/icons.json";
+    }
+    if (!fs::exists(path)) {
+        std::error_code ec;
+        fs::create_directories(platform::GetDirectory(path), ec);
+        std::ofstream f(path);
+        if (f.is_open()) {
+            f << "{\n  \"folders\": {\n    \"default\": \"default_folder.svg\",\n    \"default_open\": \"default_folder_opened.svg\"\n  },\n  \"filenames\": {},\n  \"extensions\": {}\n}\n";
+            f.close();
+        }
+    }
+    tab_bar_.OpenFile(path, &theme_manager_.Active());
+}
+
+void App::OpenSettingsWindow() {
+    show_settings_window_ = true;
+    ImGui::SetNextWindowFocus();
+}
+
+void App::CloseSettingsWindow() {
+    show_settings_window_ = false;
+}
+
+void App::RenderSettingsWindow() {
+    if (!show_settings_window_) return;
+
+    ImGuiWindowClass wc;
+    wc.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+    wc.ViewportFlagsOverrideClear = ImGuiViewportFlags_NoDecoration;
+    ImGui::SetNextWindowClass(&wc);
+
+    ImVec2 main_pos = ImGui::GetMainViewport()->Pos;
+    ImVec2 main_size = ImGui::GetMainViewport()->Size;
+    ImVec2 center_pos(main_pos.x + (main_size.x - 960.0f) * 0.5f, main_pos.y + (main_size.y - 680.0f) * 0.5f);
+    ImGui::SetNextWindowPos(center_pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(960, 680), ImGuiCond_FirstUseEver);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme_manager_.Active().background);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+    if (ImGui::Begin("Settings — Luce", &show_settings_window_, flags)) {
+        settings_view_.Render(this, &theme_manager_.Active(), font_bold_, font_italic_, font_h1_, font_h2_);
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+}
+
+void App::OpenSettingsTab() {
+    OpenSettingsWindow();
+}
+
+void App::OpenWelcomeTab() {
+    tab_bar_.OpenWelcomeTab(&theme_manager_.Active());
+}
+
+void App::OpenWorkspaceFolder(const std::string& folder) {
+    if (folder.empty() || !fs::is_directory(folder)) return;
+    file_explorer_.SetRoot(folder);
+    terminal_.SetWorkingDirectory(folder);
+    GitManager::Instance().SetRepoPath(folder);
+    ScanProjectFiles();
+    settings_manager_.AddRecentProject(folder);
+    SaveSession();
+}
+
+void App::ApplySettings(const AppSettings& s) {
+    SetEditorFontSize(s.editor_font_size);
+    SetUiFontSize(s.ui_font_size);
+
+    tab_bar_.ApplyEditorSettings(s.tab_size, s.use_spaces, s.show_minimap,
+                                 s.show_line_numbers, s.highlight_current_line,
+                                 s.zoom_with_mouse_wheel, s.cursor_blinking);
+    show_minimap_ = s.show_minimap;
+
+    SetScale(s.ui_scale);
+
+    if (!s.theme_name.empty() && theme_manager_.Active().name != s.theme_name) {
+        theme_manager_.SetTheme(s.theme_name);
+    }
+}
+
+void App::SetEditorFontSize(int size) {
+    size = std::clamp(size, 8, 48);
+    auto& s = settings_manager_.GetMutable();
+    s.editor_font_size = size;
+
+    if (font_editor_) {
+        font_editor_->Scale = static_cast<float>(size) / 15.0f;
+    }
+}
+
+void App::AdjustEditorFontSize(int delta) {
+    auto& s = settings_manager_.GetMutable();
+    int new_size = std::clamp(s.editor_font_size + delta, 8, 48);
+    if (new_size != s.editor_font_size) {
+        SetEditorFontSize(new_size);
+        settings_manager_.SaveToFile();
+        toast_manager_.ShowInfo("Editor Font Size: " + std::to_string(new_size) + "px", 1.2f);
+    }
+}
+
+void App::SetUiFontSize(int size) {
+    size = std::clamp(size, 10, 28);
+    auto& s = settings_manager_.GetMutable();
+    s.ui_font_size = size;
+
+    float scale = static_cast<float>(size) / 15.0f;
+    if (font_regular_) font_regular_->Scale = scale;
+    if (font_bold_)    font_bold_->Scale    = scale;
+    if (font_italic_)  font_italic_->Scale  = scale;
+    if (font_h1_)      font_h1_->Scale      = scale * 1.5f;
+    if (font_h2_)      font_h2_->Scale      = scale * 1.25f;
+}
+
+void App::AdjustUiFontSize(int delta) {
+    auto& s = settings_manager_.GetMutable();
+    int new_size = std::clamp(s.ui_font_size + delta, 10, 28);
+    if (new_size != s.ui_font_size) {
+        SetUiFontSize(new_size);
+        settings_manager_.SaveToFile();
+        toast_manager_.ShowInfo("UI Font Size: " + std::to_string(new_size) + "px", 1.2f);
+    }
 }
 
 void App::LoadSession() {
@@ -3095,7 +3423,7 @@ void App::SaveSession() {
 
     json tabs_arr = json::array();
     for (const auto& tab : tab_bar_.GetTabs()) {
-        if (tab && !tab->filepath.empty()) {
+        if (tab && !tab->is_settings && !tab->is_welcome && !tab->is_extension && !tab->filepath.empty()) {
             json tab_obj;
             tab_obj["path"] = tab->filepath;
             const auto& cursors = tab->editor.GetCursors();
@@ -3116,11 +3444,7 @@ void App::SaveSession() {
 
 void App::OnFileDrop(const std::string& path) {
     if (fs::is_directory(path)) {
-        file_explorer_.SetRoot(path);
-        terminal_.SetWorkingDirectory(path);
-        ScanProjectFiles();
-        GitManager::Instance().SetRepoPath(path);
-        SaveSession();
+        OpenWorkspaceFolder(path);
     } else {
         tab_bar_.OpenFile(path, &theme_manager_.Active());
         SaveSession();
@@ -3131,6 +3455,9 @@ void App::OnFocusGained() {
     tab_bar_.ReloadAllFromDisk();
     if (GitManager::Instance().HasRepo()) {
         GitManager::Instance().RefreshAsync();
+    }
+    if (settings_manager_.LoadFromFile()) {
+        ApplySettings(settings_manager_.Get());
     }
 }
 

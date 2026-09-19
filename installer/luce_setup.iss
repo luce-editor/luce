@@ -4,7 +4,7 @@
 
 #define MyAppName "Luce"
 #ifndef MyAppVersion
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.5"
 #endif
 #define MyAppPublisher "Luce Editor Team"
 #define MyAppURL "https://luce-editor.github.io/luce/"

@@ -17,6 +17,7 @@
 #include <SDL.h>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #if defined(_WIN32)
@@ -52,7 +53,7 @@ int main(int argc, char* argv[]) {
         "Luce — Code Editor",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1440, 900,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_MAXIMIZED);
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_HIDDEN);
 
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
@@ -65,6 +66,10 @@ int main(int argc, char* argv[]) {
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_context);
     SDL_GL_SetSwapInterval(1);  // VSync on.
+
+    // Pre-clear backbuffer with default dark background
+    glClearColor(0.12f, 0.12f, 0.13f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     // ── Dark title bar (Windows 10 1809+) ─────────────────────────────────
 #if defined(_WIN32)
@@ -89,7 +94,15 @@ int main(int argc, char* argv[]) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable docking.
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
+    io.ConfigViewportsNoAutoMerge = true;                 // Prevent internal panels from spawning OS windows
     io.ConfigWindowsMoveFromTitleBarOnly = true;
+
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.WindowRounding = 0.0f;
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
 
     const char* glsl_version = "#version 330 core";
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
@@ -192,14 +205,28 @@ int main(int argc, char* argv[]) {
         0x2000, 0x27BF,   // Punctuation, Currency, Arrows, Tech (⌨️), Shapes, Symbols (⚡), Dingbats (✨)
         0x2B00, 0x2BFF,   // Misc Symbols and Arrows
         0x2900, 0x297F,   // Supplemental Arrows-B
-        0x1F000, 0x1FFFF, // SMP: Emoticons, Pictographs (🎉, 🎨, 📝, 🌿, 🔍, 💻, 🧩, 📦, 📚, 🌐, 🔌), Transport, Symbols
+        0x1F300, 0x1F64F, // Miscellaneous Symbols and Pictographs, Emoticons (😀 - 😶)
+        0x1F680, 0x1F6FF, // Transport and Map Symbols (🚀, 🛸, etc.)
+        0x1F900, 0x1F9FF, // Supplemental Symbols and Pictographs (🧩, 🧱, 🧭, 🧪, etc.)
         0
     };
+
+    std::vector<uint8_t> emoji_file_bytes;
+    if (!emoji_font_path.empty()) {
+        std::ifstream f(emoji_font_path, std::ios::binary | std::ios::ate);
+        if (f.is_open()) {
+            std::streamsize size = f.tellg();
+            f.seekg(0, std::ios::beg);
+            emoji_file_bytes.resize(size);
+            f.read(reinterpret_cast<char*>(emoji_file_bytes.data()), size);
+        }
+    }
 
     ImFontConfig emoji_cfg;
     emoji_cfg.MergeMode = true;
     emoji_cfg.OversampleH = 1;
     emoji_cfg.OversampleV = 1;
+    emoji_cfg.FontDataOwnedByAtlas = false;
     emoji_cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
 
     // Load UI font first so it becomes ImGui's default font
@@ -210,29 +237,14 @@ int main(int argc, char* argv[]) {
         std::string semibold_path = ibm_dir + "/IBMPlexSans-SemiBold.ttf";
 
         font_regular = io.Fonts->AddFontFromFileTTF(regular_path.c_str(), base_font_size, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        if (!emoji_file_bytes.empty()) {
+            io.Fonts->AddFontFromMemoryTTF(emoji_file_bytes.data(), static_cast<int>(emoji_file_bytes.size()), base_font_size, &emoji_cfg, emoji_glyph_ranges);
         }
 
         font_bold    = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
-        }
-
         font_italic  = io.Fonts->AddFontFromFileTTF(italic_path.c_str(), base_font_size, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
-        }
-
         font_h1      = io.Fonts->AddFontFromFileTTF(bold_path.c_str(), base_font_size * 1.6f, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size * 1.6f, &emoji_cfg, emoji_glyph_ranges);
-        }
-
         font_h2      = io.Fonts->AddFontFromFileTTF(semibold_path.c_str(), base_font_size * 1.3f, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size * 1.3f, &emoji_cfg, emoji_glyph_ranges);
-        }
 
         printf("Loaded UI Font: IBM Plex Sans with Emoji support\n");
     }
@@ -241,8 +253,8 @@ int main(int argc, char* argv[]) {
     if (!lilex_dir.empty()) {
         std::string lilex_path = lilex_dir + "/Lilex-Regular.ttf";
         font_editor_mono = io.Fonts->AddFontFromFileTTF(lilex_path.c_str(), base_font_size, nullptr, glyph_ranges);
-        if (!emoji_font_path.empty()) {
-            io.Fonts->AddFontFromFileTTF(emoji_font_path.c_str(), base_font_size, &emoji_cfg, emoji_glyph_ranges);
+        if (!emoji_file_bytes.empty()) {
+            io.Fonts->AddFontFromMemoryTTF(emoji_file_bytes.data(), static_cast<int>(emoji_file_bytes.size()), base_font_size, &emoji_cfg, emoji_glyph_ranges);
         }
         printf("Loaded Editor Font: Lilex Monospace (%s) with Emoji support\n", lilex_path.c_str());
     } else if (font_regular) {
@@ -256,10 +268,24 @@ int main(int argc, char* argv[]) {
         exe_dir + "/../../assets/icons",
         "assets/icons"
     };
+    std::string custom_icons_dir;
+    std::vector<std::string> custom_icons_candidates = {
+        exe_dir + "/icons",
+        exe_dir + "/../icons",
+        exe_dir + "/../../icons",
+        "icons"
+    };
+    for (const auto& c : custom_icons_candidates) {
+        if (fs::exists(c)) {
+            custom_icons_dir = c;
+            break;
+        }
+    }
+
     for (const auto& d : icons_search_dirs) {
         if (fs::exists(d + "/file_type_cpp.svg")) {
-            luce::IconManager::Instance().Init(d);
-            printf("Loaded Icons from: %s\n", d.c_str());
+            luce::IconManager::Instance().Init(d, custom_icons_dir);
+            printf("Loaded Icons from: %s (custom: %s)\n", d.c_str(), custom_icons_dir.c_str());
             break;
         }
     }
@@ -297,7 +323,12 @@ int main(int argc, char* argv[]) {
                         window_focused = true;
                         app.OnFocusGained();
                     } else if (wait_event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-                        window_focused = false;
+                        if (SDL_GetKeyboardFocus() == nullptr) {
+                            window_focused = false;
+#if defined(_WIN32)
+                            SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+#endif
+                        }
                     } else if (wait_event.window.event == SDL_WINDOWEVENT_CLOSE && wait_event.window.windowID == SDL_GetWindowID(window)) {
                         running = false;
                     }
@@ -327,7 +358,12 @@ int main(int argc, char* argv[]) {
                         window_focused = true;
                         app.OnFocusGained();
                     } else if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-                        window_focused = false;
+                        if (SDL_GetKeyboardFocus() == nullptr) {
+                            window_focused = false;
+#if defined(_WIN32)
+                            SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+#endif
+                        }
                     } else if (event.window.event == SDL_WINDOWEVENT_CLOSE &&
                                event.window.windowID == SDL_GetWindowID(window)) {
                         running = false;
@@ -361,6 +397,14 @@ int main(int argc, char* argv[]) {
         // ── OpenGL rendering ──────────────────────────────────────────────
         ImGui::Render();
 
+        static bool trimmed_working_set = false;
+        if (!trimmed_working_set && active_frames_remaining == 0) {
+            trimmed_working_set = true;
+#if defined(_WIN32)
+            SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+#endif
+        }
+
         int display_w, display_h;
         SDL_GL_GetDrawableSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
@@ -370,10 +414,40 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        // Update and Render additional Platform Windows
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
+            SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+
+#if defined(_WIN32)
+            for (int i = 1; i < ImGui::GetPlatformIO().Viewports.Size; i++) {
+                ImGuiViewport* vp = ImGui::GetPlatformIO().Viewports[i];
+                if (vp->PlatformHandleRaw) {
+                    HWND hwnd = (HWND)vp->PlatformHandleRaw;
+                    BOOL use_dark = TRUE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark, sizeof(use_dark));
+                }
+            }
+#endif
+        }
+
         SDL_GL_SwapWindow(window);
+
+        static bool window_shown = false;
+        if (!window_shown) {
+            SDL_ShowWindow(window);
+            window_shown = true;
+        }
     }
 
     // ── Cleanup ───────────────────────────────────────────────────────────
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::DestroyPlatformWindows();
+    }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();

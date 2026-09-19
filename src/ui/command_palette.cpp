@@ -45,6 +45,11 @@ void CommandPalette::Open(PaletteMode mode) {
     last_search_query_.clear();
 }
 
+void CommandPalette::OpenWithText(const std::string& text, PaletteMode mode) {
+    Open(mode);
+    snprintf(input_buf_, sizeof(input_buf_), "%s", text.c_str());
+}
+
 void CommandPalette::Close() {
     open_ = false;
     focus_input_frames_ = 0;
@@ -53,6 +58,7 @@ void CommandPalette::Close() {
 }
 
 void CommandPalette::SetProjectFiles(const std::vector<std::string>& files) {
+    std::lock_guard<std::mutex> lock(project_files_mutex_);
     project_files_ = files;
 }
 
@@ -292,6 +298,11 @@ void CommandPalette::Render() {
         query.clear();
     }
     std::vector<int> visible_indices;
+
+    std::unique_lock<std::mutex> files_lock(project_files_mutex_, std::defer_lock);
+    if (mode_ == PaletteMode::Files || mode_ == PaletteMode::ProjectSearch) {
+        files_lock.lock();
+    }
 
     if (mode_ == PaletteMode::Commands) {
         for (int i = 0; i < static_cast<int>(commands_.size()); ++i) {

@@ -23,6 +23,8 @@ with all dependencies fetched via FetchContent.
   Exceptions must never cross DLL boundaries.
 - **Memory**: Prefer `std::unique_ptr` for owned resources. Raw pointers
   only for non-owning references. No manual `new`/`delete` outside RAII.
+- **Git**: always ask user for confirmation before making any changes in
+   git or pushing to repo.
 
 ## Architecture Principles
 

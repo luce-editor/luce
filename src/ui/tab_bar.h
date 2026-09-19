@@ -8,6 +8,7 @@
 #include "syntax/syntax_highlighter.h"
 #include "ui/markdown_preview.h"
 #include "ui/theme.h"
+#include "plugin/lua_plugin.h"
 
 #include <memory>
 #include <string>
@@ -30,6 +31,10 @@ struct Tab {
     unsigned int                    image_texture = 0;
     int                             image_width = 0;
     int                             image_height = 0;
+    bool                            is_extension = false;
+    LuaPluginInfo                   extension_info;
+    bool                            is_settings = false;
+    bool                            is_welcome = false;
 };
 
 /// Manages the collection of open tabs and renders the tab bar UI.
@@ -39,6 +44,44 @@ public:
 
     /// Open a file in a new tab (or switch to it if already open).
     void OpenFile(const std::string& path, const Theme* theme);
+
+    /// Open an extension README in a dedicated tab (VS Code extension style).
+    void OpenExtensionTab(const LuaPluginInfo& info, const Theme* theme);
+
+    /// Open the Settings page in a dedicated tab.
+    void OpenSettingsTab(const Theme* theme);
+
+    /// Callback to render the contents of the Settings tab.
+    using RenderSettingsCallback = std::function<void(const Theme* theme, ImFont* bold_font,
+                                                      ImFont* italic_font, ImFont* h1_font, ImFont* h2_font)>;
+    void SetRenderSettingsCallback(RenderSettingsCallback cb) { render_settings_cb_ = std::move(cb); }
+
+    /// Open the Welcome page in a dedicated tab.
+    void OpenWelcomeTab(const Theme* theme);
+
+    /// Callback to render the contents of the Welcome tab.
+    using RenderWelcomeCallback = std::function<void(const Theme* theme, ImFont* bold_font,
+                                                     ImFont* italic_font, ImFont* h1_font, ImFont* h2_font)>;
+    void SetRenderWelcomeCallback(RenderWelcomeCallback cb) { render_welcome_cb_ = std::move(cb); }
+
+    /// Callback for editor font zoom (Ctrl + MouseWheel)
+    void SetOnFontZoom(std::function<void(int delta)> cb) {
+        on_font_zoom_ = std::move(cb);
+        for (auto& tab : tabs_) {
+            if (tab) {
+                tab->editor.SetOnFontZoom(on_font_zoom_);
+                tab->split_editor.SetOnFontZoom(on_font_zoom_);
+            }
+        }
+    }
+
+    /// Apply editor options to all current and future tabs
+    void ApplyEditorSettings(int tab_size, bool use_spaces, bool show_minimap,
+                             bool show_line_numbers, bool highlight_current_line,
+                             bool zoom_with_mouse_wheel, bool cursor_blinking);
+
+    /// Set callback when user uninstalls a plugin from within the extension page.
+    void SetOnUninstallPlugin(std::function<void(const LuaPluginInfo&)> cb) { on_uninstall_plugin_ = std::move(cb); }
 
     /// Create a new untitled tab.
     void NewFile(const Theme* theme);
@@ -138,6 +181,20 @@ private:
     std::function<void(const std::string&)> on_after_save_;
     std::function<void(int, int)> on_text_changed_;
     std::function<std::vector<std::string>(const std::string&, const std::string&, int, int)> completion_provider_;
+    std::function<void(const LuaPluginInfo&)> on_uninstall_plugin_;
+    RenderSettingsCallback render_settings_cb_;
+    RenderWelcomeCallback render_welcome_cb_;
+    std::function<void(int delta)> on_font_zoom_;
+
+    int  tab_size_ = 4;
+    bool use_spaces_ = true;
+    bool show_line_numbers_ = true;
+    bool highlight_current_line_ = true;
+    bool zoom_with_mouse_wheel_ = true;
+    bool cursor_blinking_ = true;
+
+    void RenderExtensionPage(Tab* tab, const Theme* theme, ImFont* bold_font, ImFont* italic_font,
+                             ImFont* h1_font, ImFont* h2_font);
 
     // Drop target overlays & handlers
     void RenderDropOverlay(const ImVec2& min_pos, const ImVec2& max_pos, const char* title, const char* subtitle, bool hovered);

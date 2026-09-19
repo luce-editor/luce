@@ -121,8 +121,8 @@ static Theme MakeVSCodeDark2026() {
     t.tab_active_bg    = Hex(0x1f1f1f);  // Active tab
     t.tab_text         = Hex(0x8c8c8c);  // Inactive tab text
     t.tab_active_text  = Hex(0xffffff);  // Active tab text
-    t.statusbar_bg     = Hex(0x181818);  // Status bar
-    t.statusbar_fg     = Hex(0xcccccc);  // Status bar text
+    t.statusbar_bg     = Hex(0x181818);  // VS Code Dark Modern status bar bg
+    t.statusbar_fg     = Hex(0xcccccc);  // VS Code Dark Modern status bar text
     t.terminal_bg      = Hex(0x181818);  // Terminal bg
     t.terminal_fg      = Hex(0xcccccc);  // Terminal fg
     t.search_highlight = Hex(0x515c6b, 0.7f);
@@ -171,7 +171,7 @@ static Theme MakeCatppuccinMocha() {
     t.tab_text         = Hex(0x6c7086);
     t.tab_active_text  = Hex(0xcdd6f4);
     t.statusbar_bg     = Hex(0x181825);
-    t.statusbar_fg     = Hex(0xa6adc8);
+    t.statusbar_fg     = Hex(0xcba6f7);  // Catppuccin signature mauve
     t.terminal_bg      = Hex(0x11111b);
     t.terminal_fg      = Hex(0xcdd6f4);
     t.search_highlight = Hex(0xf9e2af, 0.35f);
@@ -219,7 +219,7 @@ static Theme MakeOneDark() {
     t.tab_text         = Hex(0x5c6370);
     t.tab_active_text  = Hex(0xabb2bf);
     t.statusbar_bg     = Hex(0x21252b);
-    t.statusbar_fg     = Hex(0x9da5b4);
+    t.statusbar_fg     = Hex(0x61afef);  // One Dark signature light blue text
     t.terminal_bg      = Hex(0x1e2127);
     t.terminal_fg      = Hex(0xabb2bf);
     t.search_highlight = Hex(0xe5c07b, 0.35f);
@@ -266,7 +266,7 @@ static Theme MakeNord() {
     t.tab_text         = Hex(0x4c566a);
     t.tab_active_text  = Hex(0xeceff4);
     t.statusbar_bg     = Hex(0x3b4252);
-    t.statusbar_fg     = Hex(0xd8dee9);
+    t.statusbar_fg     = Hex(0x88c0d0);  // Nord frost cyan text
     t.terminal_bg      = Hex(0x2e3440);
     t.terminal_fg      = Hex(0xd8dee9);
     t.search_highlight = Hex(0xebcb8b, 0.35f);
@@ -519,9 +519,9 @@ void ThemeManager::ApplyToImGui() const {
     c[ImGuiCol_Button]               = Mix(bg, fg, 0.10f);
     c[ImGuiCol_ButtonHovered]        = Mix(bg, fg, 0.20f);
     c[ImGuiCol_ButtonActive]         = accent;
-    c[ImGuiCol_Header]               = WithAlpha(t.selection, 0.55f);
-    c[ImGuiCol_HeaderHovered]        = WithAlpha(t.selection, 0.80f);
-    c[ImGuiCol_HeaderActive]         = t.selection;
+    c[ImGuiCol_Header]               = Mix(bg, fg, 0.10f);
+    c[ImGuiCol_HeaderHovered]        = Mix(bg, fg, 0.16f);
+    c[ImGuiCol_HeaderActive]         = Mix(bg, fg, 0.22f);
     c[ImGuiCol_Separator]            = Mix(bg, fg, 0.16f);
     c[ImGuiCol_SeparatorHovered]     = accent;
     c[ImGuiCol_SeparatorActive]      = accent;
@@ -542,6 +542,7 @@ void ThemeManager::SetTheme(const std::string& name) {
     for (int i = 0; i < static_cast<int>(themes_.size()); ++i) {
         if (themes_[i].name == name) {
             active_index_ = i;
+            ApplyToImGui();
             return;
         }
     }
@@ -549,6 +550,7 @@ void ThemeManager::SetTheme(const std::string& name) {
 
 void ThemeManager::CycleTheme() {
     active_index_ = (active_index_ + 1) % static_cast<int>(themes_.size());
+    ApplyToImGui();
 }
 
 std::vector<std::string> ThemeManager::GetThemeNames() const {

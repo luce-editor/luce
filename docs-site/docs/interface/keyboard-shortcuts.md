@@ -23,6 +23,7 @@ Luce features keyboard shortcuts designed for fast, seamless code navigation and
 | `Tab` | Indent / Emmet Expand | Indent line or expand HTML Emmet abbreviation (e.g. `div.container`, `ul>li*3`, `!`) |
 | `Ctrl + Z` | Undo | Revert recent edits |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo | Re-apply reverted edits |
+| `Ctrl + Wheel` | Zoom Editor Font | Smoothly increase or decrease editor code font size |
 | `F12` / `Ctrl + Enter` | Go to Definition | Jump to symbol declaration across project workspace |
 
 ## File & Tab Management
@@ -35,6 +36,8 @@ Luce features keyboard shortcuts designed for fast, seamless code navigation and
 | `Ctrl + W` | Close Tab | Close the active editor tab |
 | `Ctrl + Tab` | Next Tab | Switch focus to the next open tab |
 | `Ctrl + \` | Toggle Split View | Split editor into two side-by-side editing panes |
+| `Ctrl + ,` | Preferences: Settings | Open graphical Settings tab |
+| `Ctrl + Shift + ,` | Open Settings File | Open `settings.json` configuration file directly |
 
 ## Search & Navigation Tools
 

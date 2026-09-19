@@ -1,0 +1,27 @@
+{
+  "folders": {
+    "default": "default_folder.svg",
+    "default_open": "default_folder_opened.svg"
+  },
+  "filenames": {
+    "Dockerfile": "file_type_docker.svg",
+    "Makefile": "file_type_makefile.svg",
+    "CMakeLists.txt": "file_type_cmake.svg",
+    ".gitignore": "file_type_git.svg",
+    "LICENSE": "file_type_license.svg",
+    "README.md": "file_type_markdown.svg",
+    "package.json": "file_type_npm.svg",
+    "Cargo.toml": "file_type_cargo.svg",
+    "go.mod": "file_type_go.svg",
+    "go.sum": "file_type_go.svg"
+  },
+  "extensions": {
+    ".zig": "file_type_zig.svg",
+    ".odin": "file_type_odin.svg",
+    ".v": "file_type_v.svg",
+    ".glsl": "file_type_glsl.svg",
+    ".hlsl": "file_type_hlsl.svg",
+    ".vert": "file_type_glsl.svg",
+    ".frag": "file_type_glsl.svg"
+  }
+}

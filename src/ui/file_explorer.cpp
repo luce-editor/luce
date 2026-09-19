@@ -152,6 +152,7 @@ void FileExplorer::Render() {
         // Refresh trigger
     }
     if (ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         ImGui::SetTooltip("Refresh Explorer");
     }
 
@@ -359,6 +360,9 @@ void FileExplorer::RenderDirectory(const std::string& path) {
                                         ImGuiTreeNodeFlags_SpanAvailWidth;
         
         bool open = ImGui::TreeNodeEx((name + "##dir").c_str(), node_flags, "     %s", name.c_str());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
 
         // Draw real SVG folder texture icon
         ImTextureID folder_tex = IconManager::Instance().GetFolderIcon(open);
@@ -455,6 +459,9 @@ void FileExplorer::RenderDirectory(const std::string& path) {
         }
 
         ImGui::TreeNodeEx((name + "##file").c_str(), leaf_flags, "     %s", name.c_str());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
 
         // Drag Source for file
         if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {

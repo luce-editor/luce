@@ -21,7 +21,12 @@ Luce korzysta z ręcznie pisanych, deterministycznych automatów skończonych (m
   - Wielowierszowe docstringi potrójnych cudzysłowów `"""` i `'''`, f-stringi, dekoratory `@` oraz komentarze `#`.
   - Inteligentne automatyczne wcięcie (tab) po dwukropku `:` przy wciśnięciu klawisza `Enter`.
 - **Rust** (`.rs`)
+- **JSON** (`.json`):
+  - Wydajna maszyna stanów rozpoznająca klucze/właściwości, wartości tekstowe, literały liczbowe, wartości logiczne/null (`true`, `false`, `null`), interpunkcję oraz komentarze (`//`, `/* */`).
+  - Zintegrowane rozszerzenie Lua `json_intellisense` dostarczające inteligentne podpowiedzi kluczy pliku `settings.json`, nazw motywów i wartości JSON.
 - **Technologie Webowe**: HTML, CSS, JavaScript (`.html`, `.htm`, `.css`, `.js`)
+- **Lua** (`.lua`):
+  - Dedykowany lekser ze wsparciem dla słów kluczowych Lua 5.1–5.4 (`local`, `function`, `then`, `end` itp.), łańcuchów wielowierszowych (`[[ ... ]]`), komentarzy blokowych (`--[[ ... ]]`) i operatorów.
 - **CMake** (`CMakeLists.txt`, `.cmake`)
 - **Markdown** (`.md`) z podglądem na żywo (`Ctrl+Shift+M`)
 

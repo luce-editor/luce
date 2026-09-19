@@ -1,7 +1,5 @@
 -- ============================================================================
--- format_on_save.lua — Auto-trim trailing whitespace before saving
---
--- Demonstrates the new Luce Lua API 2.0 event hook: 'before_save'
+-- format_on_save / init.lua — Auto-trim trailing whitespace before saving
 -- ============================================================================
 
 luce.plugin = {
@@ -9,7 +7,6 @@ luce.plugin = {
     version     = "2.0.0",
     author      = "Luce Team",
     description = "Trims trailing whitespace on all lines before saving.",
-    icon        = "⚡",
 }
 
 luce.on("before_save", function(filepath)
