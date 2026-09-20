@@ -29,9 +29,14 @@ Welcome to **Luce v0.1.5**! This release brings significant UI/UX enhancements, 
 
 ### 5. Welcome Screen & Getting Started
 - **Distraction-Free Dashboard**: Beautiful Zed-inspired Welcome page featuring quick actions (New File, Open Folder, Clone Repo), recent workspace history, and configuration shortcuts.
-- **Startup Customization**: Configurable toggle switch to automatically show the Welcome screen when starting Luce with no open tabs.
+- **Automatic & Reliable Display**: Welcome screen is automatically shown on startup when enabled or whenever all tabs are closed, and fully supports dragging & dropping files to open immediately.
 
-### 6. Expanded Lexers & Plugin Architecture
+### 6. Drag & Drop & Performance Fixes
+- **Zero-Lag File Drag & Drop**: Resolved multi-second freeze when dropping files onto the editor canvas. Directory symbol indexing runs asynchronously without blocking the UI thread.
+- **External File Git Diff Guard**: Opening external files outside the workspace repository now instantly skips git diff queries instead of blocking on command timeouts.
+- **Interactive Drop Targets**: Fixed Dear ImGui hovered ID conflicts so dragging files onto the main editor, split zones, or empty screen always triggers responsive drop zones and highlights.
+
+### 7. Expanded Lexers & Plugin Architecture
 - **New Syntax Lexers**: Hand-written, fast state-machine lexers for **JSON** and **Lua** with full token classification and theme integration.
 - **Modular Plugin Directory**: Each Lua plugin now lives in its own directory (`plugins/<name>/init.lua`) with optional metadata, custom icons, and snippet providers.
 - **Plugin Management**: Inspect installed extensions, open plugin directories, and safely delete plugins directly through the UI with modal confirmation.

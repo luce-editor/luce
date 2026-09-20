@@ -211,7 +211,7 @@ public:
 
 private:
     struct GitFileDiffMarks                                git_diff_marks_;
-    float                                                  git_diff_timer_ = 0.0f;
+    float                                                  git_diff_timer_ = 2.0f;
 
     // Cached render geometry for symbol resolution and keyboard shortcuts
     ImVec2                                                 last_origin_ = ImVec2(0, 0);

@@ -63,6 +63,8 @@ public:
     using RenderWelcomeCallback = std::function<void(const Theme* theme, ImFont* bold_font,
                                                      ImFont* italic_font, ImFont* h1_font, ImFont* h2_font)>;
     void SetRenderWelcomeCallback(RenderWelcomeCallback cb) { render_welcome_cb_ = std::move(cb); }
+    void SetShowWelcomeOnStartup(bool show) { show_welcome_on_startup_ = show; }
+    bool ShowWelcomeOnStartup() const { return show_welcome_on_startup_; }
 
     /// Callback for editor font zoom (Ctrl + MouseWheel)
     void SetOnFontZoom(std::function<void(int delta)> cb) {
@@ -192,6 +194,7 @@ private:
     bool highlight_current_line_ = true;
     bool zoom_with_mouse_wheel_ = true;
     bool cursor_blinking_ = true;
+    bool show_welcome_on_startup_ = true;
 
     void RenderExtensionPage(Tab* tab, const Theme* theme, ImFont* bold_font, ImFont* italic_font,
                              ImFont* h1_font, ImFont* h2_font);

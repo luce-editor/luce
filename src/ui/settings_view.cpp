@@ -690,6 +690,7 @@ void SettingsView::RenderGeneralSettings(App* app, const Theme* theme, ImFont* b
                      "Controls whether the Welcome page is automatically displayed on startup or when all tabs are closed.",
                      &settings.show_welcome_on_startup, theme, bold_font, [&](bool v) {
         settings.show_welcome_on_startup = v;
+        app->GetTabBar().SetShowWelcomeOnStartup(v);
         app->GetSettingsManager().SaveToFile();
     });
 

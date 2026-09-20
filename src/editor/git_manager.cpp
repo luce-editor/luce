@@ -240,13 +240,34 @@ char GitManager::GetFileStatusCode(const std::string& rel_or_abs_path) const {
 
 GitFileDiffMarks GitManager::GetFileDiffMarks(const std::string& rel_or_abs_path) const {
     GitFileDiffMarks marks;
-    if (repo_path_.empty()) return marks;
+    if (!has_repo_ || repo_path_.empty()) return marks;
 
     std::string norm = NormalizePath(rel_or_abs_path);
-    if (!repo_path_.empty() && norm.starts_with(repo_path_)) {
-        norm = norm.substr(repo_path_.length());
-        if (!norm.empty() && norm[0] == '/') norm = norm.substr(1);
+    std::string repo = repo_path_;
+
+    bool is_inside = false;
+#if defined(_WIN32)
+    std::string lower_norm = norm;
+    std::string lower_repo = repo;
+    std::ranges::transform(lower_norm, lower_norm.begin(), ::tolower);
+    std::ranges::transform(lower_repo, lower_repo.begin(), ::tolower);
+    if (lower_norm.starts_with(lower_repo)) {
+        norm = norm.substr(repo.length());
+        is_inside = true;
     }
+#else
+    if (norm.starts_with(repo)) {
+        norm = norm.substr(repo.length());
+        is_inside = true;
+    }
+#endif
+
+    // If file is an absolute path outside the repo, skip git diff completely
+    if (!is_inside && !norm.empty() && (norm[0] == '/' || (norm.size() > 2 && norm[1] == ':'))) {
+        return marks;
+    }
+
+    if (!norm.empty() && norm[0] == '/') norm = norm.substr(1);
     if (norm.empty()) return marks;
 
     auto res = RunGit("diff HEAD -U0 -- \"" + norm + "\"");

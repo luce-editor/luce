@@ -165,13 +165,11 @@ App::App() {
     // Restore previous folder and open files FIRST so explorer root is known
     LoadSession();
 
-    // If no files/tabs are open, check if Welcome Screen should be shown
-    if (tab_bar_.TabCount() == 0) {
-        if (settings_manager_.Get().show_welcome_on_startup) {
-            OpenWelcomeTab();
-        } else {
-            tab_bar_.NewFile(&theme_manager_.Active());
-        }
+    // If show_welcome_on_startup is enabled, open Welcome tab
+    if (settings_manager_.Get().show_welcome_on_startup) {
+        OpenWelcomeTab();
+    } else if (tab_bar_.TabCount() == 0) {
+        tab_bar_.NewFile(&theme_manager_.Active());
     }
 
     // Apply settings from settings.json
@@ -3270,6 +3268,8 @@ void App::ApplySettings(const AppSettings& s) {
     show_minimap_ = s.show_minimap;
 
     SetScale(s.ui_scale);
+
+    tab_bar_.SetShowWelcomeOnStartup(s.show_welcome_on_startup);
 
     if (!s.theme_name.empty() && theme_manager_.Active().name != s.theme_name) {
         theme_manager_.SetTheme(s.theme_name);

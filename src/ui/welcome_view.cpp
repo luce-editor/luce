@@ -175,17 +175,32 @@ void WelcomeView::Render(App* app, const Theme* theme, ImFont* bold_font,
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 10.0f));
 
-    bool show_welcome = app->GetSettingsManager().Get().show_welcome_on_startup;
-    if (ToggleSwitch("##show_welcome_toggle", &show_welcome, theme, 20.0f)) {
-        app->GetSettingsManager().GetMutable().show_welcome_on_startup = show_welcome;
-        app->GetSettingsManager().SaveToFile();
+    if (ImGui::BeginTable("##welcome_footer_tbl", 2, ImGuiTableFlags_None, ImVec2(content_w, 0.0f))) {
+        ImGui::TableSetupColumn("left", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("right", ImGuiTableColumnFlags_WidthFixed, 48.0f);
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+
+        if (bold_font) ImGui::PushFont(bold_font);
+        ImGui::TextColored(theme->foreground, "Show Welcome page on startup");
+        if (bold_font) ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(theme->gutter_fg.x, theme->gutter_fg.y, theme->gutter_fg.z, 0.85f));
+        ImGui::TextWrapped("When enabled, the Welcome screen will open whenever no project files are open.");
+        ImGui::PopStyleColor();
+
+        ImGui::TableNextColumn();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 1.0f);
+        auto& settings = app->GetSettingsManager().GetMutable();
+        if (ToggleSwitch("##show_welcome_toggle", &settings.show_welcome_on_startup, theme, 22.0f)) {
+            app->GetTabBar().SetShowWelcomeOnStartup(settings.show_welcome_on_startup);
+            app->GetSettingsManager().SaveToFile();
+        }
+
+        ImGui::EndTable();
     }
-    ImGui::SameLine();
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 1.0f);
-    ImGui::TextUnformatted("Show Welcome page on startup");
-    ImGui::PushStyleColor(ImGuiCol_Text, theme->gutter_fg);
-    ImGui::TextUnformatted("When enabled, the Welcome screen will open whenever no project files are open.");
-    ImGui::PopStyleColor();
 
     ImGui::Dummy(ImVec2(0, 30.0f));
 

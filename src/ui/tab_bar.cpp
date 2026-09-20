@@ -165,20 +165,11 @@ void TabBar::OpenFile(const std::string& path, const Theme* theme) {
         tab->split_editor.SetOnGoToDefinition(on_goto_definition_);
         tab->split_editor.SetCompletionProvider(completion_provider_);
 
-        // Index the opened file and any sibling source files in the same directory
+        // Index the opened file and any sibling source files in the same directory asynchronously
         if (symbol_index_) {
             symbol_index_->IndexFile(path);
             std::string parent_dir = platform::GetDirectory(path);
             if (!parent_dir.empty()) {
-                std::error_code ec;
-                for (const auto& entry : fs::directory_iterator(parent_dir, ec)) {
-                    if (!entry.is_regular_file(ec)) continue;
-                    auto ext = entry.path().extension().string();
-                    std::ranges::transform(ext, ext.begin(), ::tolower);
-                    if (ext == ".h" || ext == ".hpp" || ext == ".hxx" || ext == ".inl") {
-                        symbol_index_->IndexFile(entry.path().generic_string());
-                    }
-                }
                 symbol_index_->IndexDirectoryAsync(parent_dir);
             }
         }
@@ -555,6 +546,31 @@ void TabBar::ToggleActiveMarkdownPreview() {
 void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, ImFont* italic_font,
                     ImFont* h1_font, ImFont* h2_font) {
     if (tabs_.empty()) {
+        if (show_welcome_on_startup_ && render_welcome_cb_) {
+            render_welcome_cb_(theme, bold_font, italic_font, h1_font, h2_font);
+
+            const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+            if (payload && payload->IsDataType("LUCE_FILE")) {
+                ImVec2 p_min = ImGui::GetWindowPos();
+                ImVec2 avail = ImGui::GetWindowSize();
+                ImVec2 cur = ImGui::GetCursorScreenPos();
+                ImGui::SetCursorScreenPos(p_min);
+                ImGui::InvisibleButton("##welcome_empty_drop_target", avail);
+                if (ImGui::BeginDragDropTarget()) {
+                    RenderDropOverlay(p_min, ImVec2(p_min.x + avail.x, p_min.y + avail.y), "Open File", "Drop to open in editor", true);
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_FILE")) {
+                        std::string fpath(static_cast<const char*>(p->Data));
+                        OpenFile(fpath, theme);
+                    }
+                    ImGui::EndDragDropTarget();
+                } else {
+                    RenderDropOverlay(p_min, ImVec2(p_min.x + avail.x, p_min.y + avail.y), "Open File", nullptr, false);
+                }
+                ImGui::SetCursorScreenPos(cur);
+            }
+            return;
+        }
+
         ImVec2 avail = ImGui::GetContentRegionAvail();
         if (avail.x > 50.0f && avail.y > 50.0f) {
             ImGui::BeginChild("##empty_editor_drop_area", avail, false);
@@ -575,7 +591,10 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
             if (payload && payload->IsDataType("LUCE_FILE")) {
                 ImVec2 p_min = ImGui::GetWindowPos();
                 ImVec2 p_max = ImVec2(p_min.x + avail.x, p_min.y + avail.y);
-                if (ImGui::BeginDragDropTargetCustom(ImRect(p_min, p_max), ImGui::GetID("##empty_drop_target"))) {
+                ImVec2 cur = ImGui::GetCursorScreenPos();
+                ImGui::SetCursorScreenPos(p_min);
+                ImGui::InvisibleButton("##empty_drop_target", avail);
+                if (ImGui::BeginDragDropTarget()) {
                     RenderDropOverlay(p_min, p_max, "Open File", "Drop to open in editor", true);
                     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_FILE")) {
                         std::string fpath(static_cast<const char*>(p->Data));
@@ -585,6 +604,7 @@ void TabBar::Render(const Theme* theme, ImFont* editor_font, ImFont* bold_font, 
                 } else {
                     RenderDropOverlay(p_min, p_max, "Open File", nullptr, false);
                 }
+                ImGui::SetCursorScreenPos(cur);
             }
             ImGui::EndChild();
         }
@@ -1125,20 +1145,28 @@ void TabBar::HandleEditorDropTargets(const Theme* theme, const ImVec2& canvas_mi
     ImVec2 split_min = ImVec2(canvas_max.x - split_zone_w, canvas_min.y);
     ImVec2 split_max = canvas_max;
 
+    ImVec2 cur_pos = ImGui::GetCursorScreenPos();
+
     // 1. Left/Main Drop Zone (for opening file in the current editor)
     if (payload->IsDataType("LUCE_FILE")) {
-        if (ImGui::BeginDragDropTargetCustom(ImRect(main_min, main_max), ImGui::GetID("##editor_main_drop_zone"))) {
+        ImGui::SetCursorScreenPos(main_min);
+        ImGui::InvisibleButton("##editor_main_drop_zone", ImVec2(main_max.x - main_min.x, main_max.y - main_min.y));
+        if (ImGui::BeginDragDropTarget()) {
             RenderDropOverlay(main_min, main_max, "Open in Active Editor", "Drop to open file", true);
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_FILE")) {
                 std::string path(static_cast<const char*>(p->Data));
                 OpenFile(path, theme);
             }
             ImGui::EndDragDropTarget();
+        } else {
+            RenderDropOverlay(main_min, main_max, "Open in Active Editor", nullptr, false);
         }
     }
 
     // 2. Right Split Drop Zone (drag tab or file to open side-by-side)
-    if (ImGui::BeginDragDropTargetCustom(ImRect(split_min, split_max), ImGui::GetID("##editor_split_drop_zone"))) {
+    ImGui::SetCursorScreenPos(split_min);
+    ImGui::InvisibleButton("##editor_split_drop_zone", ImVec2(split_max.x - split_min.x, split_max.y - split_min.y));
+    if (ImGui::BeginDragDropTarget()) {
         RenderDropOverlay(split_min, split_max, "Split Right", "Drop to open to the side", true);
         if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_TAB")) {
             int src_idx = *static_cast<const int*>(p->Data);
@@ -1152,6 +1180,8 @@ void TabBar::HandleEditorDropTargets(const Theme* theme, const ImVec2& canvas_mi
     } else {
         RenderDropOverlay(split_min, split_max, "Split Right", nullptr, false);
     }
+
+    ImGui::SetCursorScreenPos(cur_pos);
 }
 
 void TabBar::HandleSplitPaneDropTargets(const Theme* theme, const ImVec2& left_min, const ImVec2& left_max,
@@ -1160,8 +1190,12 @@ void TabBar::HandleSplitPaneDropTargets(const Theme* theme, const ImVec2& left_m
     if (!payload) return;
     if (!payload->IsDataType("LUCE_TAB") && !payload->IsDataType("LUCE_FILE")) return;
 
+    ImVec2 cur_pos = ImGui::GetCursorScreenPos();
+
     // 1. Left Pane Drop Target
-    if (ImGui::BeginDragDropTargetCustom(ImRect(left_min, left_max), ImGui::GetID("##split_left_drop_zone"))) {
+    ImGui::SetCursorScreenPos(left_min);
+    ImGui::InvisibleButton("##split_left_drop_zone", ImVec2(left_max.x - left_min.x, left_max.y - left_min.y));
+    if (ImGui::BeginDragDropTarget()) {
         RenderDropOverlay(left_min, left_max, "Left Pane", "Drop to open in left view", true);
         if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_TAB")) {
             int src_idx = *static_cast<const int*>(p->Data);
@@ -1178,7 +1212,9 @@ void TabBar::HandleSplitPaneDropTargets(const Theme* theme, const ImVec2& left_m
     }
 
     // 2. Right Pane Drop Target
-    if (ImGui::BeginDragDropTargetCustom(ImRect(right_min, right_max), ImGui::GetID("##split_right_drop_zone"))) {
+    ImGui::SetCursorScreenPos(right_min);
+    ImGui::InvisibleButton("##split_right_drop_zone", ImVec2(right_max.x - right_min.x, right_max.y - right_min.y));
+    if (ImGui::BeginDragDropTarget()) {
         RenderDropOverlay(right_min, right_max, "Right Pane", "Drop to open in right view", true);
         if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("LUCE_TAB")) {
             int src_idx = *static_cast<const int*>(p->Data);
@@ -1192,6 +1228,8 @@ void TabBar::HandleSplitPaneDropTargets(const Theme* theme, const ImVec2& left_m
     } else {
         RenderDropOverlay(right_min, right_max, "Right Pane", nullptr, false);
     }
+
+    ImGui::SetCursorScreenPos(cur_pos);
 }
 
 void TabBar::RenderExtensionPage(Tab* tab, const Theme* theme, ImFont* bold_font, ImFont* italic_font,

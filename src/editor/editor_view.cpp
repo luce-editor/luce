@@ -1063,6 +1063,9 @@ void EditorView::HandleMouseInput(ImVec2 origin, float lh, float cw, float gw) {
 
     // Drag to select (only when dragging started inside text viewport).
     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
+        if (ImGui::GetDragDropPayload() != nullptr) {
+            return; // Ignore text selection while dragging files or tabs
+        }
         ImVec2 click_pos = io.MouseClickedPos[0];
         bool clicked_on_scrollbar = (click_pos.x >= win_pos.x + win_size.x - 16.0f) ||
                                     (click_pos.y >= win_pos.y + win_size.y - 16.0f);
