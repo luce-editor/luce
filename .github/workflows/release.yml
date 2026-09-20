@@ -1,19 +1,21 @@
 name: Release
 
-on:
+'on':
   push:
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. v0.1.0)'
+        description: 'Release version (e.g. v0.1.5)'
         required: false
-        default: 'v0.1.0'
+        default: 'v0.1.5'
+        type: string
       release_notes:
         description: 'Release description (optional markdown). If left empty, RELEASE_NOTES.md or automatic template is used.'
         required: false
         default: ''
+        type: string
 
 permissions:
   contents: write
@@ -105,34 +107,7 @@ jobs:
           } elseif (Test-Path "RELEASE_NOTES.md") {
             $notesContent = Get-Content -Raw "RELEASE_NOTES.md"
           } else {
-            $notesContent = @"
-## Luce $env:RELEASE_TAG
-
-Welcome to the **$env:RELEASE_TAG** release of **Luce** — a lightweight, GPU-accelerated desktop code editor built with C++23 and Dear ImGui.
-
-### 📦 Downloads & Verification
-
-| File | Type | SHA-256 Checksum |
-| :--- | :--- | :--- |
-| **\`Luce-Setup-$env:RELEASE_TAG-x64.exe\`** | Windows Installer | \`$installerHash\` |
-| **\`Luce-$env:RELEASE_TAG-win64-portable.zip\`** | Portable Archive (.zip) | \`$zipHash\` |
-
-### 🚀 Getting Started
-
-- **Windows Installer (\`.exe\`)**:
-  - Automatically installs per-user (no administrator privileges needed).
-  - Adds *"Open with Luce"* to the Windows Explorer context menu.
-  - Adds \`luce\` to system \`PATH\` for quick terminal launching (\`luce .\`).
-  - Creates Desktop and Start Menu shortcuts.
-- **Portable Package (\`.zip\`)**:
-  - Extract anywhere and run \`luce.exe\` directly without installation.
-
-### 📖 Documentation & Resources
-
-- 🌐 [Official Documentation & Website](https://luce-editor.github.io/luce/)
-- ⌨️ [Keyboard Shortcuts Reference](https://luce-editor.github.io/luce/docs/interface/keyboard-shortcuts)
-- 🔌 [Lua Plugin System Architecture](https://luce-editor.github.io/luce/docs/plugins/architecture)
-"@
+            $notesContent = "## Luce $env:RELEASE_TAG`n`nOfficial release of Luce."
           }
 
           $notesFile = "build\installer\release_body.md"
